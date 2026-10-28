@@ -10,8 +10,9 @@ SenorX99 is a Windows app for supported Chinesium X99 Xeon motherboards. It help
 
 - Secure Boot factory-default PK/KEK/db inspection and validated 2023-capable updates, preserving dbx. ROM defaults are distinct from the keys currently enrolled on the running motherboard.
 - Turbo Boost Unlock for supported Xeon E5-26xx v3 CPUs, validated undervolt payloads, microcode handling and mirrored C-state defaults. Selecting TBU opens a CPU-compatibility reminder: applying it with an E5 v4 CPU may prevent POST. Continuing requires an explicit Yes; No is selected by default.
-- Performance-oriented BIOS defaults and unlocked-multiplier OC profiles where the specific firmware layout is supported, including classic and compact XD3/XD4 layouts. The defaults' **What does this mean?** explanation lists every setting, its target value and its purpose, including power-use and ECC-scrubbing tradeoffs. Secure Boot shows **Already up to date** when the ROM already contains the required current factory keys.
-- SenorSpace selected automatically for each detected 4-bit/8-bit splash format, including the full-resolution 800 × 600 4-bit asset. Custom BMP selection, multiple-logo handling, test-fit and final pixel verification are retained. When a temporary-copy build verifies automatic logo replacement for the loaded ROM, Replace the firmware boot logo is checked by default. Uncheck it to keep the current logo; that choice survives tool rechecks. A missing tool or unsuccessful compatibility check leaves it unchecked.
+- **Overclocking unlock.** Unlock BIOS overclocking controls and apply the associated default settings on supported firmware for CPUs with an unlocked multiplier.
+- **Performance-oriented BIOS defaults.** Apply default BIOS settings aimed at improving performance. The app's **What does this mean?** explanation lists each setting and why it changes.
+- **Boot-logo replacement.** Change the picture displayed when the computer starts, using the included image or your own BMP file.
 - FIT validation/repair, mutation containment and final ROM validation.
 - BIOS dump and a complete flash workflow with two independent, byte-identical backups, permanent backup retention, target-size validation, final verification and automatic recovery where required.
 
