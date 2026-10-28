@@ -14,6 +14,7 @@
     "fpt_support/fparts.txt": "9f815e22fdc5562f0af6ac552c27e0adccf9f3654c3d76dbc4f9cc9278bc2313",
     "secureboot_donors/KekVar.ffs": "6b8bcfd771d6efcba8459d62d2a8687a252671d66ea0f22ee6aa2140ac8e802a",
     "secureboot_donors/PkVar.ffs": "6ad2c119c70b4325ad29138c65d0ddafd09cdba299d34fdcb4e3f2aa01b1e7dd",
-    "secureboot_donors/dbVar.ffs": "744662e5b2c92171cf777d36a6b4e3c59d2a6d99ffe4914a41f6a7a2a24f779a"
+    "secureboot_donors/dbVar.ffs": "744662e5b2c92171cf777d36a6b4e3c59d2a6d99ffe4914a41f6a7a2a24f779a",
+    "languages/en.json": "4480e94efa7078213efaf2ef6524df20f4f74ddbf50081496c1f72700337dbd2"
   }
 }

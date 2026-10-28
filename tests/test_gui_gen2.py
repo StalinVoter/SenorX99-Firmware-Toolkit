@@ -31,6 +31,7 @@ def test_gui_feature_gates(name,opt,monkeypatch,tmp_path):
     w.load_rom(str(p))
     spin(app,lambda:w.inspect_thread is None and w.probe_thread is None)
     assert w.report is not None
+    w._set_nav(w.PAGE_CREATE); w.custom_mode.click()
     assert w.tbu_box.isEnabled() and w.sb_box.isEnabled()
     assert w.optimized_box.isEnabled() is opt
     assert not w.overclock_box.isEnabled()

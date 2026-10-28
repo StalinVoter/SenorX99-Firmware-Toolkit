@@ -142,7 +142,7 @@ _install_cases()
 if __name__=='__main__': unittest.main()
 
 class FailureUiTests(unittest.TestCase):
-    def test_failed_report_and_diagnostic_buttons_are_enabled(self):
+    def test_failed_build_keeps_report_and_diagnostic_error_for_the_workflow(self):
         # Execute the actual handler without requiring a Qt installation.
         import ast
         from types import SimpleNamespace
@@ -157,7 +157,9 @@ class FailureUiTests(unittest.TestCase):
             class Button:
                 def setEnabled(self,value): self.enabled=value
             banner=SimpleNamespace(setText=lambda s:None,setStyleSheet=lambda s:None)
-            ui=SimpleNamespace(build_btn=Button(),open_output_btn=Button(),open_report_btn=Button(),open_diagnostics_btn=Button(),build_state_banner=banner)
+            diagnostic=[]
+            ui=SimpleNamespace(build_log=SimpleNamespace(appendPlainText=diagnostic.append),_refresh_state=lambda:None)
             report=BuildReport('input','output');report.error='rejected';report.tool_output['Diagnostic evidence']=temp
             globals_['_build_finished'](ui,report,'')
-            assert ui.open_report_btn.enabled and ui.open_output_btn.enabled and ui.open_diagnostics_btn.enabled
+            assert ui.last_build_report is report
+            assert ui._last_build_status=='build.failed' and diagnostic==['rejected']

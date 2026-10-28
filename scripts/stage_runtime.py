@@ -18,7 +18,8 @@ def stage(root=ROOT):
         shutil.copy2(source, target)
     shutil.copy2(root / 'resource-manifest.json', dist / 'resource-manifest.json')
     shutil.copy2(root / 'README.md', dist / 'README.txt')
-    for name in ('START-HERE.md', 'RELEASE-NOTES-v0.86.md', 'TEST-ELEVATED-HELPER.cmd'):
+    shutil.copy2(root / 'languages/README.md', dist / 'languages/README.md')
+    for name in ('START-HERE.md', 'RELEASE-NOTES-v0.91.md', 'TEST-ELEVATED-HELPER.cmd'):
         shutil.copy2(root / name, dist / name)
     (dist / 'tools').mkdir(exist_ok=True)
     shutil.copy2(root / 'tools/README.txt', dist / 'tools/README.txt')

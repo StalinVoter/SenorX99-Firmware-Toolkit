@@ -1,179 +1,71 @@
+"""Six-step firmware workflow. Firmware mutations remain in the validated engine."""
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import os
+import shutil
 import sys
+import tempfile
 import traceback
 
-from PySide6.QtCore import QObject, QThread, Signal, Qt, QUrl, QTimer
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QFont, QPixmap
-from PySide6.QtWidgets import (
-    QApplication,
-    QCheckBox,
-    QComboBox,
-    QFileDialog,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QMainWindow,
-    QMessageBox,
-    QPlainTextEdit,
-    QProgressBar,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QStackedWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QObject, QSettings, QThread, Signal, Qt, QUrl, QTimer
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QPixmap
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialogButtonBox,
+    QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+    QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+    QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
+from . import __version__
+from .cpu import CpuDetection, detect_cpu
+from .localization import Catalog
+from .recommendations import FEATURES, firmware_availability, recommended_modifications
 from .inspection import inspect_rom
-from .reporting import write_inspection, report_paths
-from .sessionlog import start_session_log, finish_session_log, install_exception_hook, log
-from . import __version__, APP_SUBTITLE
-from .tool_gui import ToolsMixin
-from .firmware import sha256_file
-from .buildprogress import BuildProgressTracker
-from .fpt_gui import BiosAccessMixin
-from .pipeline import build_rom, default_output
-from .tools import discover_tools, app_directory
-from .ser8989 import inspect_driver
 from .splash_preflight import inspect_splash_replacement
-from .feature_text import PERFORMANCE_DEFAULTS_DESCRIPTION, TBU_CPU_WARNING, performance_defaults_explanation, logo_check_failure_reason
+from .pipeline import build_rom, default_output
+from .reporting import write_inspection, report_paths
+from .firmware import sha256_file
+from .ser8989 import inspect_driver
+from .tools import app_directory, discover_tools
+from . import tool_inventory as inventory
+from . import fpt_gui
+from .fpt import backup_directory
+from .tool_gui import ToolDownloadWorker
+from .buildprogress import BuildProgressTracker
+from .sessionlog import start_session_log, finish_session_log, install_exception_hook, log
+
+APP_TITLE = f'SenorX99 v{__version__}'
+STYLE = '''
+QWidget {font-family:"Segoe UI","Arial";font-size:10pt;color:#202a37;}
+QMainWindow {background:#f3f5f8;}
+QFrame#sidebar {background:#eaf0f6;border-right:1px solid #d4dce6;}
+QPushButton {background:white;border:1px solid #bdc8d5;border-radius:7px;padding:9px 14px;}
+QPushButton:hover {background:#eaf3fc;}
+QPushButton:disabled {color:#8d99a8;background:#edf0f4;border-color:#d8dee6;}
+QPushButton#primary {background:#096cc2;color:white;border-color:#096cc2;font-weight:600;}
+QPushButton#primary:disabled {background:#cad5e0;border-color:#cad5e0;color:#738295;}
+QPushButton#nav {background:transparent;border:0;text-align:left;padding:0;}
+QPushButton#nav:checked {background:#d7e7f8;}
+QPushButton#help {color:#0868b4;font-weight:700;border-radius:15px;padding:3px;}
+QFrame#card {background:white;border:1px solid #dce3eb;border-radius:10px;}
+QLabel {background:transparent;}
+QLabel#title {font-size:22pt;font-weight:650;}
+QLabel#muted {color:#5a6b7d;}
+QLabel#notice {background:#e8f2fc;border:1px solid #cbdef2;border-radius:7px;padding:10px;}
+QLabel#warning {color:#9e2222;}
+QComboBox {background:white;border:1px solid #bdc8d5;border-radius:5px;padding:6px;}
+QComboBox:disabled {background:#edf0f4;color:#8d99a8;border-color:#d8dee6;}
+QRadioButton:disabled {color:#8d99a8;}
+QPlainTextEdit {background:#111b2c;color:#dde7f3;border:1px solid #c9d4e1;border-radius:7px;font-family:Consolas;font-size:9pt;}
+QProgressBar {border:1px solid #c5d1df;border-radius:5px;background:#e8edf3;text-align:center;min-height:22px;}
+QProgressBar::chunk {background:#1675ce;border-radius:4px;}
+QCheckBox {spacing:8px;}
+QRadioButton {spacing:7px;}
+QScrollArea {background:transparent;border:0;}
+'''
 
 
-APP_TITLE = f"SenorX99 v{__version__}"
-
-
-STYLE = r"""
-QMainWindow, QWidget {
-    background: #f4f5f7;
-    color: #1f2328;
-    font-family: "Segoe UI", "Arial";
-    font-size: 10pt;
-}
-QFrame#nav {
-    background: #eef0f3;
-    border-right: 1px solid #d5d8dc;
-}
-QLabel#brand {
-    font-size: 18pt;
-    font-weight: 650;
-    padding: 18px 18px 4px 18px;
-}
-QLabel#brandSub {
-    color: #61666d;
-    padding: 0 18px 18px 18px;
-}
-QPushButton.navButton {
-    text-align: left;
-    padding: 11px 16px;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    font-size: 10.5pt;
-}
-QPushButton.navButton:hover { background: #e1e4e8; }
-QPushButton.navButton:checked {
-    background: #dce8f6;
-    color: #0f4c81;
-    font-weight: 600;
-}
-QLabel#pageTitle {
-    font-size: 23pt;
-    font-weight: 650;
-}
-QLabel#pageSub {
-    color: #5f6368;
-    font-size: 10.5pt;
-}
-QFrame.card {
-    background: white;
-    border: 1px solid #dfe2e6;
-    border-radius: 10px;
-}
-QLabel.cardTitle {
-    font-size: 12.5pt;
-    font-weight: 650;
-}
-QLabel.cardStatus {
-    font-weight: 650;
-}
-QLabel.muted { color: #646a73; }
-QLabel.good { color: #1d6b39; font-weight: 650; }
-QLabel.warn { color: #8a5b00; font-weight: 650; }
-QLabel.bad { color: #a12a2a; font-weight: 650; }
-QLabel.info { color: #0b5ea8; font-weight: 650; }
-QLabel#infoBanner {
-    background: #e9f2fb;
-    border: 1px solid #c8def2;
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: #174f7c;
-}
-QLabel#warningBanner {
-    background: #fff7df;
-    border: 1px solid #ead79c;
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: #6e5200;
-}
-QPushButton {
-    padding: 8px 14px;
-    border: 1px solid #c8ccd1;
-    border-radius: 7px;
-    background: #ffffff;
-}
-QPushButton:hover { background: #f2f4f7; }
-QPushButton:disabled { color: #9da2a9; background: #f3f4f5; }
-QPushButton.primary {
-    background: #0f6cbd;
-    color: white;
-    border-color: #0f6cbd;
-    font-weight: 600;
-}
-QPushButton.primary:hover { background: #115ea3; }
-QLineEdit, QComboBox, QPlainTextEdit, QTableWidget, QListWidget {
-    background: white;
-    border: 1px solid #cfd3d8;
-    border-radius: 6px;
-}
-QLineEdit, QComboBox { padding: 6px 8px; min-height: 24px; }
-QCheckBox { spacing: 8px; }
-QHeaderView::section {
-    background: #f0f2f4;
-    padding: 7px;
-    border: 0;
-    border-bottom: 1px solid #d6d9dd;
-    font-weight: 600;
-}
-QProgressBar {
-    border: 1px solid #cfd3d8;
-    border-radius: 6px;
-    background: white;
-    text-align: center;
-    min-height: 20px;
-}
-QProgressBar::chunk { background: #0f6cbd; border-radius: 5px; }
-QToolButton {
-    border: 0;
-    background: transparent;
-    color: #0f5f9f;
-    font-weight: 600;
-    padding: 4px 0;
-}
-"""
-
-
-def _dropped_file(event) -> str | None:
+def _dropped_file(event):
     mime = event.mimeData()
     if not mime.hasUrls():
         return None
@@ -181,254 +73,26 @@ def _dropped_file(event) -> str | None:
     if len(urls) != 1 or not urls[0].isLocalFile():
         return None
     path = Path(urls[0].toLocalFile())
-    return str(path) if path.is_file() and path.suffix.casefold() in ('.rom', '.bin') else None
+    return str(path) if path.is_file() and path.suffix.lower() in ('.rom', '.bin') else None
 
 
 class DropZone(QFrame):
     dropped = Signal(str)
 
-    def __init__(self) -> None:
+    def __init__(self, owner):
         super().__init__()
+        self.owner = owner
         self.setAcceptDrops(True)
-        self.setObjectName("dropZone")
-        self.setStyleSheet(
-            "QFrame#dropZone {background:white;border:2px dashed #b9bec5;border-radius:12px;}"
-            "QFrame#dropZone:hover {border-color:#0f6cbd;}"
-        )
-        self.setMinimumHeight(210)
+        self.setMinimumSize(240, 110)
+        self.setStyleSheet('QFrame{background:#fbfdff;border:2px dashed #b5c7da;border-radius:10px;} QLabel{border:0;}')
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(10)
-        title = QLabel("Open a BIOS / ROM file")
-        title.setAlignment(Qt.AlignCenter)
-        font = QFont()
-        font.setPointSize(17)
-        font.setBold(True)
-        title.setFont(font)
-        layout.addStretch(1)
-        layout.addWidget(title)
-        sub = QLabel("Drag a .ROM or .BIN file here, or choose one from disk.")
-        sub.setAlignment(Qt.AlignCenter)
-        sub.setProperty("class", "muted")
-        sub.setStyleSheet("color:#646a73;")
-        layout.addWidget(sub)
-        choose = QPushButton("Choose firmware file…")
-        choose.setProperty("class", "primary")
-        choose.setStyleSheet("QPushButton {background:#0f6cbd;color:white;border-color:#0f6cbd;font-weight:600;padding:9px 18px;} QPushButton:hover{background:#115ea3;}")
-        choose.setMaximumWidth(210)
-        choose.clicked.connect(self._browse)
-        row = QHBoxLayout()
-        row.addStretch(1)
-        row.addWidget(choose)
-        row.addStretch(1)
-        layout.addLayout(row)
-        layout.addStretch(1)
-
-    def _browse(self) -> None:
-        owner = self.window()
-        if hasattr(owner, '_require_all_tools') and not owner._require_all_tools():
-            return
-        path, _ = QFileDialog.getOpenFileName(self, "Open firmware image", "", "Firmware images (*.rom *.ROM *.bin *.BIN)")
-        if path:
-            self.dropped.emit(path)
-
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        owner = self.window()
-        if self.isEnabled() and not (hasattr(owner, '_rom_input_allowed') and not owner._rom_input_allowed()) and _dropped_file(event):
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dragMoveEvent(self, event):
-        self.dragEnterEvent(event)
-
-    def dropEvent(self, event: QDropEvent) -> None:
-        owner = self.window()
-        path = _dropped_file(event)
-        if (path and self.isEnabled() and not (hasattr(owner, '_rom_input_allowed') and not owner._rom_input_allowed())
-                and (not hasattr(owner, '_require_all_tools') or owner._require_all_tools(notify=False))):
-            self.dropped.emit(path)
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-
-class FeatureCard(QFrame):
-    action_requested = Signal(str)
-
-    def __init__(self, key: str, title: str, description: str) -> None:
-        super().__init__()
-        self.key = key
-        self.setProperty("class", "card")
-        self.setStyleSheet("QFrame {background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        layout = QGridLayout(self)
-        layout.setContentsMargins(18, 15, 18, 15)
-        layout.setHorizontalSpacing(16)
-        layout.setVerticalSpacing(7)
-        self.title = QLabel(title)
-        self.title.setStyleSheet("font-size:12.5pt;font-weight:650;border:0;")
-        layout.addWidget(self.title, 0, 0)
-        self.status = QLabel("Not checked")
-        self.status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.status.setStyleSheet("font-weight:650;border:0;color:#646a73;")
-        layout.addWidget(self.status, 0, 1)
-        self.description = QLabel(description)
-        self.description.setWordWrap(True)
-        self.description.setStyleSheet("color:#5f6368;border:0;")
-        layout.addWidget(self.description, 1, 0, 1, 2)
-        self.detail = QLabel("")
-        self.detail.setWordWrap(True)
-        self.detail.setStyleSheet("color:#5f6368;border:0;")
-        self.detail.hide()
-        layout.addWidget(self.detail, 2, 0, 1, 2)
-        self.more = QToolButton()
-        self.more.setText("What does this mean? ▾")
-        self.more.clicked.connect(self._toggle_detail)
-        layout.addWidget(self.more, 3, 0, alignment=Qt.AlignLeft)
-        self.action = QPushButton("Add to build")
-        self.action.clicked.connect(lambda: self.action_requested.emit(self.key))
-        layout.addWidget(self.action, 3, 1, alignment=Qt.AlignRight)
-
-    def _toggle_detail(self) -> None:
-        visible = not self.detail.isVisible()
-        self.detail.setVisible(visible)
-        self.more.setText("Hide explanation ▴" if visible else "What does this mean? ▾")
-
-    def set_state(self, text: str, tone: str = "muted", action_text: str | None = None, action_enabled: bool = True, detail: str = "") -> None:
-        colors = {
-            "good": "#1d6b39",
-            "warn": "#8a5b00",
-            "bad": "#a12a2a",
-            "info": "#0b5ea8",
-            "muted": "#646a73",
-        }
-        self.status.setText(text)
-        self.status.setStyleSheet(f"font-weight:650;border:0;color:{colors.get(tone, colors['muted'])};")
-        if action_text is None:
-            self.action.hide()
-        else:
-            self.action.show()
-            self.action.setText(action_text)
-            self.action.setEnabled(action_enabled)
-        self.detail.setText(detail)
-        self.more.setVisible(bool(detail))
-
-
-class InspectWorker(QObject):
-    finished = Signal(object, str)
-
-    def __init__(self, path: Path) -> None:
-        super().__init__()
-        self.path = path
-
-    def run(self) -> None:
-        try:
-            report = inspect_rom(self.path)
-            report.splash = inspect_splash_replacement(self.path, report.rom_sha256)
-            report.rows.append(dict(category='Boot logo', check='Automatic replacement trial',
-                                    result=report.splash['state'].upper(), details=report.splash['reason']))
-            write_inspection(report, self.path)
-            self.finished.emit(report, "")
-        except Exception:
-            self.finished.emit(None, traceback.format_exc())
-
-
-class BuildWorker(QObject):
-    progress = Signal(str, str, str)
-    finished = Signal(object, str)
-
-    def __init__(self, kwargs: dict) -> None:
-        super().__init__()
-        self.kwargs = kwargs
-
-    def run(self) -> None:
-        try:
-            report = build_rom(
-                progress=lambda name, status, details: self.progress.emit(name, status, details),
-                **self.kwargs,
-            )
-            self.finished.emit(report, "")
-        except Exception:
-            self.finished.emit(None, traceback.format_exc())
-
-
-class Window(ToolsMixin, BiosAccessMixin, QMainWindow):
-    PAGE_OVERVIEW, PAGE_ROM, PAGE_CREATE, PAGE_BUILDS, PAGE_TECHNICAL, PAGE_TOOLS = range(6)
-
-    def __init__(self, *, runtime_check: bool = False) -> None:
-        super().__init__()
-        self.setWindowTitle(APP_TITLE)
-        self.resize(1220, 840)
-        self.setMinimumSize(980, 700)
-        self.setStyleSheet(STYLE)
-        self.setAcceptDrops(True)
-        self.download_thread = self.download_worker = None
-        self._tool_views = []
-        self._download_result = None
-        self._download_name = ''
-        self._bios_running = False
-        self._bios_action_buttons = []
-        self._all_tools_ready = False
-        self._tbu_acknowledged = False
-        self._tbu_rom_sha256 = None
-        self._pending_open_path = None
-        self.own_dump_hashes = set()
-        self._secureboot_flash_context = False
-        self._splash_user_choice = None
-        self._splash_choice_rom_hash = None
-        self._pending_splash_recheck = False
-
-        self.probe_thread = None
-        self.probe_worker = None
-        self.fpt_probe = None
-        self.fpt_status_labels = []
-        self.last_built_rom = None
-        self.pending_flash = None
-        self.progress_tracker = None
-        self.rom_path: Path | None = None
-        self.report = None
-        self.inspect_thread: QThread | None = None
-        self.inspect_worker: InspectWorker | None = None
-        self.build_thread: QThread | None = None
-        self.build_worker: BuildWorker | None = None
-        self.last_build_report = None
-        self.technical_log_lines: list[str] = []
-        self.output_manual = False
-
-        root = QWidget()
-        self.setCentralWidget(root)
-        shell = QHBoxLayout(root)
-        shell.setContentsMargins(0, 0, 0, 0)
-        shell.setSpacing(0)
-
-        shell.addWidget(self._make_nav())
-        self.stack = QStackedWidget()
-        shell.addWidget(self.stack, 1)
-
-        self.overview_page = self._make_overview_page()
-        self.rom_page = self._make_rom_page()
-        self.create_page = self._make_create_page()
-        self.builds_page = self._make_builds_page()
-        self.technical_page = self._make_technical_page()
-        self.tools_page, tools_layout = self._page_header('Required tools', 'Install or repair the exact utilities used by each firmware feature.')
-        tools_scroll = QScrollArea(); tools_scroll.setWidgetResizable(True); tools_scroll.setFrameShape(QFrame.NoFrame)
-        tools_scroll.setWidget(self._make_tools_card()); tools_layout.addWidget(tools_scroll)
-        for page in (self.overview_page, self.rom_page, self.create_page, self.builds_page, self.technical_page, self.tools_page):
-            self.stack.addWidget(page)
-
-        self.refresh_drivers()
-        self._use_bundled_donor()
-        self._use_bundled_splash()
-        self._set_nav(self.PAGE_OVERVIEW)
-        self._set_loaded_state(False)
-        for edit in self.findChildren(QLineEdit):
-            edit.setAcceptDrops(False)
-        self._refresh_tools()
-        if not runtime_check:
-            self._start_fpt_probe()
+        for key in ('rom.drop', 'rom.drop_detail'):
+            text = owner.label(key); text.setAlignment(Qt.AlignCenter)
+            text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            layout.addWidget(text)
 
     def dragEnterEvent(self, event):
-        if self._rom_input_allowed() and _dropped_file(event):
+        if self.owner._rom_input_allowed() and _dropped_file(event):
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -438,1156 +102,1014 @@ class Window(ToolsMixin, BiosAccessMixin, QMainWindow):
 
     def dropEvent(self, event):
         path = _dropped_file(event)
-        if path and self._rom_input_allowed() and self._require_all_tools(notify=False):
-            self.load_rom(path)
+        if path and self.owner._rom_input_allowed() and self.owner._require_all_tools(notify=False):
+            self.dropped.emit(path)
             event.acceptProposedAction()
         else:
             event.ignore()
 
-    # ---------- shell / navigation ----------
-    def _make_nav(self) -> QWidget:
-        nav = QFrame()
-        nav.setObjectName("nav")
-        nav.setFixedWidth(225)
-        layout = QVBoxLayout(nav)
-        layout.setContentsMargins(10, 8, 10, 12)
-        layout.setSpacing(5)
-        brand = QLabel("SenorX99")
-        brand.setObjectName("brand")
-        layout.addWidget(brand)
-        sub = QLabel(APP_SUBTITLE + "\n\nv" + __version__)
-        sub.setWordWrap(True)
-        sub.setObjectName("brandSub")
-        layout.addWidget(sub)
-        self.nav_buttons: list[QPushButton] = []
-        for i, text in enumerate(("Overview", "Load / Dump ROM", "Create ROM", "Builds", "Technical details", "Required tools")):
-            button = QPushButton(text)
-            button.setCheckable(True)
-            button.setProperty("class", "navButton")
-            button.setStyleSheet(
-                "QPushButton{text-align:left;padding:11px 16px;border:0;border-radius:7px;background:transparent;}"
-                "QPushButton:hover{background:#e1e4e8;}"
-                "QPushButton:checked{background:#dce8f6;color:#0f4c81;font-weight:600;}"
-            )
-            button.clicked.connect(lambda checked=False, index=i: self._set_nav(index))
-            self.nav_buttons.append(button)
-            layout.addWidget(button)
-        layout.addStretch(1)
-        footer = QLabel("Build, inspect, dump and flash.\nVerified backups before flashing.")
-        footer.setWordWrap(True)
-        footer.setStyleSheet("color:#646a73;padding:10px 12px;")
-        layout.addWidget(footer)
-        return nav
 
-    def _set_nav(self, index: int) -> None:
-        self.stack.setCurrentIndex(index)
-        for i, button in enumerate(self.nav_buttons):
-            button.setChecked(i == index)
+class CpuWorker(QObject):
+    finished = Signal(object)
 
-    def _page_header(self, title: str, subtitle: str) -> tuple[QWidget, QVBoxLayout]:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(32, 26, 32, 28)
-        layout.setSpacing(14)
-        title_label = QLabel(title)
-        title_label.setObjectName("pageTitle")
-        layout.addWidget(title_label)
-        sub = QLabel(subtitle)
-        sub.setObjectName("pageSub")
-        sub.setWordWrap(True)
-        layout.addWidget(sub)
-        return page, layout
+    def run(self):
+        try:
+            result = detect_cpu()
+        except Exception:
+            result = CpuDetection(error='query-failed')
+        self.finished.emit(result)
 
-    # ---------- overview ----------
+
+class InspectWorker(QObject):
+    finished = Signal(object, str)
+
+    def __init__(self, path):
+        super().__init__(); self.path = path
+
+    def run(self):
+        try:
+            report = inspect_rom(self.path)
+            report.splash = inspect_splash_replacement(self.path, report.rom_sha256)
+            try:
+                write_inspection(report, self.path)
+            except OSError as exc:
+                log('INSPECTION REPORT', str(exc))
+            self.finished.emit(report, '')
+        except Exception:
+            self.finished.emit(None, traceback.format_exc())
+
+
+class LogoWorker(QObject):
+    finished = Signal(object)
+
+    def __init__(self, source, digest, image):
+        super().__init__(); self.source, self.digest, self.image = source, digest, image
+
+    def run(self):
+        try:
+            result = inspect_splash_replacement(self.source, self.digest, self.image)
+        except Exception as exc:
+            result = dict(supported=False, reason=str(exc))
+        self.finished.emit(result)
+
+
+class BuildWorker(QObject):
+    progress = Signal(str, str, str)
+    finished = Signal(object, str)
+
+    def __init__(self, kwargs):
+        super().__init__(); self.kwargs = kwargs
+
+    def run(self):
+        try:
+            result = build_rom(progress=self.progress.emit, **self.kwargs)
+            self.finished.emit(result, '')
+        except Exception:
+            self.finished.emit(None, traceback.format_exc())
+
+
+class OperationView(QFrame):
+    """Inline FPT progress on the left and unmodified transcript on the right."""
+    def __init__(self, owner):
+        super().__init__(); self.owner = owner
+        layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        self.status = QLabel(); self.status.setWordWrap(True); layout.addWidget(self.status)
+        split = QSplitter(Qt.Horizontal)
+        left = QWidget(); self.progress_layout = QVBoxLayout(left)
+        self.progress_layout.setContentsMargins(0, 0, 12, 0)
+        self.progress_layout.addWidget(owner.label('fpt.progress'))
+        self.phase_host = QWidget(); self.phases_layout = QVBoxLayout(self.phase_host)
+        self.phases_layout.setContentsMargins(0, 0, 0, 0); self.phases_layout.addStretch()
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.phase_host)
+        self.progress_layout.addWidget(scroll, 1)
+        right = QWidget(); right_layout = QVBoxLayout(right); right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(owner.label('fpt.output'))
+        self.console = QPlainTextEdit(); self.console.setReadOnly(True)
+        right_layout.addWidget(self.console)
+        split.addWidget(left); split.addWidget(right); split.setSizes([310, 600])
+        split.setChildrenCollapsible(False); layout.addWidget(split, 1)
+        self.setMinimumHeight(270)
+        self.phases = {}; self.mode = None
+
+    def reset(self, mode):
+        self.mode = mode; self.console.clear(); self.phases.clear()
+        while self.phases_layout.count() > 1:
+            item = self.phases_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        self.status.setStyleSheet('')
+        self.status.setText(self.owner.t('fpt.dumping' if mode == 'dump' else 'fpt.flashing'))
+
+    def event_received(self, event):
+        typ = event.get('type')
+        if typ == 'transcript':
+            self.console.appendPlainText(event.get('text', ''))
+        elif typ == 'status':
+            raw = event.get('text', '')
+            # Backend status diagnostics stay intact; friendly summaries use IDs.
+            log('FPT STATUS', raw)
+            if 'recovery' in raw.lower() or 'restor' in raw.lower():
+                self.status.setText(self.owner.t('fpt.recovering'))
+        elif typ == 'phase':
+            ident = (event.get('group', ''), event.get('key', ''))
+            if ident not in self.phases:
+                frame = QWidget(); row = QVBoxLayout(frame); row.setContentsMargins(0, 2, 0, 7)
+                label = QLabel(); label.setWordWrap(True)
+                bar = QProgressBar(); bar.setRange(0, 100)
+                row.addWidget(label); row.addWidget(bar)
+                self.phases_layout.insertWidget(self.phases_layout.count() - 1, frame)
+                self.phases[ident] = (label, bar)
+            label, bar = self.phases[ident]
+            group = event.get('group', '').lower()
+            group_key = ('fpt.backup1' if 'backup dump 1' in group else 'fpt.backup2' if 'backup dump 2' in group else
+                         'fpt.recovery' if 'recovery' in group or 'restore' in group else
+                         'fpt.target' if self.mode == 'flash' else 'fpt.operation')
+            phase = str(event.get('key', '')).split(':')[0].lower()
+            phase_key = {'read': 'fpt.read', 'erase': 'fpt.erase', 'program': 'fpt.program', 'verify': 'fpt.verify'}.get(phase, 'fpt.operation')
+            label.setText(self.owner.t(group_key) + '\n' + self.owner.t(phase_key))
+            label.setProperty('groupKey', group_key); label.setProperty('phaseKey', phase_key)
+            bar.setValue(max(0, min(100, int(event.get('percent', 0)))))
+
+    def retranslate(self):
+        for label, _ in self.phases.values():
+            label.setText(self.owner.t(label.property('groupKey')) + '\n' + self.owner.t(label.property('phaseKey')))
+        if hasattr(self, '_result_translation'):
+            key, values = self._result_translation
+            self.status.setText(self.owner.t(key, **values))
+
+
+class Window(QMainWindow):
+    PAGE_TOOLS, PAGE_ROM, PAGE_ANALYSIS, PAGE_CREATE, PAGE_BUILDS, PAGE_FINISH = range(6)
+    PAGE_OVERVIEW = PAGE_ANALYSIS
+
+    def __init__(self, *, runtime_check=False):
+        super().__init__()
+        self.catalog = Catalog(); self.settings = QSettings('SenorX99', 'FirmwareToolkit')
+        try:
+            self.catalog.select(str(self.settings.value('language', 'en')))
+        except (OSError, ValueError):
+            pass
+        self._bindings = []; self._initializing = True; self._updating = False; self._closing = False
+        self._threads = {}; self._pending_open_path = None
+        for name in ('cpu', 'inspect', 'logo', 'build', 'probe', 'download', 'bios'):
+            setattr(self, name + '_thread', None); setattr(self, name + '_worker', None)
+        self.rom_path = None; self.report = None; self.cpu_detection = None; self.fpt_probe = None
+        self._all_tools_ready = False; self._resources_ready = False; self._resource_error = ''
+        self._source_ready = False; self._config_complete = False; self._delivery_complete = False
+        self._tbu_acknowledged = False; self._custom_logo = None; self._custom_logo_result = None
+        self.last_built_rom = None; self.last_build_report = None; self._build_digest = None; self._build_plan = None
+        self._bios_running = False; self._download_name = ''; self._download_result = None
+        self._splash_user_choice = None; self.own_dump_hashes = set(); self._help_key = None
+        self._build_progress_records = []; self._last_build_status = 'build.idle'; self._fpt_result = None
+        self.setWindowTitle(self.t('app.title', version=__version__))
+        screen = QApplication.primaryScreen()
+        area = screen.availableGeometry() if screen else None
+        self.setMinimumSize(min(1000, area.width() - 30) if area else 1000,
+                            min(700, area.height() - 40) if area else 700)
+        self.resize(min(1380, area.width() - 40) if area else 1380,
+                    min(930, area.height() - 50) if area else 930)
+        self.setStyleSheet(STYLE); self.setAcceptDrops(True)
+        shell = QWidget(); self.setCentralWidget(shell); outer = QHBoxLayout(shell)
+        outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
+        outer.addWidget(self._make_sidebar())
+        self.stack = QStackedWidget(); outer.addWidget(self.stack, 1)
+        self.pages = []; self.page_bodies = []; self.continue_buttons = []; self.gate_labels = []
+        for i in range(6): self._make_page(i)
+        self._make_tools_page(); self._make_rom_page(); self._make_analysis_page()
+        self._make_config_page(); self._make_build_page(); self._make_finish_page()
+        self.refresh_drivers(); self._refresh_tools()
+        self._initializing = False; self._refresh_state(); self._set_nav(0)
+        if not runtime_check:
+            self._launch('cpu', CpuWorker(), self._cpu_finished)
+            if self._all_tools_ready: QTimer.singleShot(0, self._start_fpt_probe)
+
+    def t(self, key, **values):
+        return self.catalog.text(key, **values)
+
+    def label(self, key, *, name=None):
+        widget = QLabel(self.t(key)); widget.setWordWrap(True); widget.setTextFormat(Qt.PlainText)
+        if name: widget.setObjectName(name)
+        self._bindings.append((widget, key))
+        return widget
+
+    def button(self, key, callback=None, *, primary=False):
+        widget = QPushButton(self.t(key))
+        if primary: widget.setObjectName('primary')
+        if callback: widget.clicked.connect(callback)
+        self._bindings.append((widget, key))
+        return widget
+
+    def _make_sidebar(self):
+        frame = QFrame(); frame.setObjectName('sidebar'); frame.setFixedWidth(285)
+        layout = QVBoxLayout(frame); layout.setContentsMargins(15, 22, 15, 18); layout.setSpacing(8)
+        brand = QLabel('SenorX99'); brand.setStyleSheet('font-size:22pt;font-weight:700;'); layout.addWidget(brand)
+        layout.addWidget(self.label('app.subtitle', name='muted'))
+        version = QLabel('v' + __version__); version.setObjectName('muted'); layout.addWidget(version)
+        layout.addSpacing(18)
+        self.nav_buttons = []; self.nav_marks = []; self.nav_labels = []
+        for i in range(6):
+            button = QPushButton(); button.setObjectName('nav'); button.setCheckable(True)
+            button.setMinimumHeight(70)
+            row = QHBoxLayout(button); row.setContentsMargins(8, 10, 8, 10)
+            mark = QLabel(str(i + 1) + '.'); mark.setFixedWidth(43)
+            text = QLabel(self.t(f'step.{i+1}.title')); text.setWordWrap(True)
+            for label in (mark, text): label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            row.addWidget(mark); row.addWidget(text, 1)
+            button.clicked.connect(lambda _checked=False, index=i: self._set_nav(index))
+            layout.addWidget(button); self.nav_buttons.append(button); self.nav_marks.append(mark); self.nav_labels.append(text)
+        layout.addStretch()
+        layout.addWidget(self.label('app.language'))
+        self.language_combo = QComboBox()
+        for code, name in self.catalog.available(): self.language_combo.addItem(name, code)
+        self.language_combo.setCurrentIndex(max(0, self.language_combo.findData(self.catalog.code)))
+        self.language_combo.currentIndexChanged.connect(self._language_changed)
+        layout.addWidget(self.language_combo)
+        return frame
+
+    def _make_page(self, index):
+        page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(28, 25, 28, 24); layout.setSpacing(14)
+        title = self.label(f'step.{index+1}.title', name='title'); layout.addWidget(title)
+        row = QHBoxLayout(); row.setSpacing(20)
+        row.addWidget(self.label(f'step.{index+1}.description', name='muted'), 1)
+        button = self.button('common.finish' if index == 5 else 'common.continue', lambda: self._continue(index), primary=True)
+        row.addWidget(button, alignment=Qt.AlignTop); layout.addLayout(row)
+        gate = QLabel(); gate.setWordWrap(True); gate.setObjectName('notice'); layout.addWidget(gate)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True)
+        body = QWidget(); content = QVBoxLayout(body); content.setContentsMargins(0, 0, 7, 0); content.setSpacing(14)
+        scroll.setWidget(body); layout.addWidget(scroll, 1)
+        self.stack.addWidget(page); self.pages.append((page, content)); self.page_bodies.append(body)
+        self.continue_buttons.append(button); self.gate_labels.append(gate)
+
+    def _card(self, layout):
+        frame = QFrame(); frame.setObjectName('card'); box = QVBoxLayout(frame); box.setContentsMargins(17, 15, 17, 15); box.setSpacing(11)
+        layout.addWidget(frame); return box
+
+    def _make_tools_page(self):
+        layout = self.pages[0][1]; card = self._card(layout)
+        self.tool_summary = QLabel(); self.tool_summary.setWordWrap(True); card.addWidget(self.tool_summary)
+        self.tool_rows = {}; self.tool_hosts = {}
+        for group in inventory.TOOL_GROUPS:
+            host = QWidget(); row = QHBoxLayout(host); row.setContentsMargins(0, 5, 0, 5)
+            name = QLabel(self.t('tools.fpt', version=inventory.TOOLS_BY_NAME['fptw64.exe'].version) if group.name == 'fpt' else group.label)
+            name.setMinimumWidth(180); name.setWordWrap(True)
+            status = QLabel(); status.setWordWrap(True)
+            button = self.button('tools.download', lambda _checked=False, key=group.name: self._download_tool(key))
+            row.addWidget(name, 2); row.addWidget(status, 2); row.addWidget(button)
+            card.addWidget(host); self.tool_rows[group.name] = (status, button); self.tool_hosts[group.name] = host
+        self.recheck_tools_btn = self.button('tools.recheck', self._recheck_tools); card.addWidget(self.recheck_tools_btn, alignment=Qt.AlignLeft)
+        self.tool_folder_label = QLabel(); self.tool_folder_label.setWordWrap(True); card.addWidget(self.tool_folder_label)
+        self.tool_download_status = QLabel(); self.tool_download_status.setWordWrap(True); card.addWidget(self.tool_download_status)
+        self.tool_diagnostics = QPlainTextEdit(); self.tool_diagnostics.setReadOnly(True); self.tool_diagnostics.setMaximumHeight(170)
+        self.tool_diagnostics.hide(); card.addWidget(self.tool_diagnostics); layout.addStretch()
+
+    def _make_rom_page(self):
+        layout = self.pages[1][1]
+        self.fpt_status_label = QLabel(); self.fpt_status_label.setWordWrap(True); layout.addWidget(self.fpt_status_label)
+        self.fpt_status_labels = [self.fpt_status_label]
+        self.probe_button = self.button('fpt.check', self._start_fpt_probe); layout.addWidget(self.probe_button, alignment=Qt.AlignLeft)
+        source = self._card(layout); top = QHBoxLayout(); left = QVBoxLayout()
+        self.load_rom_btn = self.button('rom.browse', self._browse_rom, primary=True)
+        self.dump_btn = self.button('rom.dump', self.start_dump)
+        left.addWidget(self.load_rom_btn); left.addWidget(self.dump_btn); left.addStretch()
+        top.addLayout(left, 1); self.drop_zone = DropZone(self); self.drop_zone.dropped.connect(self.load_rom)
+        top.addWidget(self.drop_zone, 2); source.addLayout(top)
+        self.loaded_rom_label = QLabel(); self.loaded_rom_label.setWordWrap(True); source.addWidget(self.loaded_rom_label)
+        self.dump_view = OperationView(self); layout.addWidget(self.dump_view, 1)
+
+    def _make_analysis_page(self):
+        layout = self.pages[2][1]
+        self.analysis_status = QLabel(); self.analysis_status.setWordWrap(True); layout.addWidget(self.analysis_status)
+        self.analysis_meta = QLabel(); self.analysis_meta.setWordWrap(True); self.analysis_meta.setTextInteractionFlags(Qt.TextSelectableByMouse); layout.addWidget(self.analysis_meta)
+        self.analysis_rows = {}
+        card = self._card(layout)
+        for key in FEATURES:
+            row = QHBoxLayout(); name = self.label('feature.' + key); status = QLabel(); status.setWordWrap(True)
+            row.addWidget(name, 3); row.addWidget(status, 2); card.addLayout(row); self.analysis_rows[key] = status
+        row = QHBoxLayout(); row.addWidget(self.label('analysis.startup'), 3)
+        self.fit_status_label = QLabel(); self.fit_status_label.setWordWrap(True); row.addWidget(self.fit_status_label, 2); card.addLayout(row)
+        card.addWidget(self.label('analysis.startup_help', name='muted'))
+        self.analysis_logo_reason = QLabel(); self.analysis_logo_reason.setWordWrap(True); card.addWidget(self.analysis_logo_reason)
+        layout.addWidget(self.label('common.details'))
+        self.analysis_diagnostics = QPlainTextEdit(); self.analysis_diagnostics.setReadOnly(True); self.analysis_diagnostics.setMaximumHeight(180)
+        layout.addWidget(self.analysis_diagnostics); layout.addStretch()
+
+    def _make_config_page(self):
+        layout = self.pages[3][1]; mode_card = self._card(layout)
+        self.recommended_mode = QRadioButton(); self.custom_mode = QRadioButton()
+        self.mode_group = QButtonGroup(self); self.mode_group.addButton(self.recommended_mode); self.mode_group.addButton(self.custom_mode)
+        mode_card.addWidget(self.recommended_mode); mode_card.addWidget(self.custom_mode)
+        mode_card.addWidget(self.label('config.other_system', name='muted'))
+        self.config_note = QLabel(); self.config_note.setWordWrap(True); mode_card.addWidget(self.config_note)
+        self.recommended_mode.setChecked(True); self.recommended_mode.toggled.connect(self._mode_changed)
+        split = QSplitter(Qt.Horizontal); split.setChildrenCollapsible(False)
+        table = QFrame(); table.setObjectName('card'); rows = QVBoxLayout(table); rows.setContentsMargins(15, 12, 15, 12)
+        self.feature_boxes = {}; self.na_labels = {}; self.help_buttons = {}
+        for key in FEATURES:
+            host = QWidget(); grid = QGridLayout(host); grid.setContentsMargins(0, 7, 0, 7)
+            box = QCheckBox(); box.toggled.connect(lambda checked, feature=key: self._feature_changed(feature, checked))
+            na = self.label('common.na'); na.setStyleSheet('color:#7f8996;font-weight:600;')
+            check_host = QWidget(); checks = QVBoxLayout(check_host); checks.setContentsMargins(0, 0, 0, 0); checks.addWidget(box); checks.addWidget(na)
+            grid.addWidget(check_host, 0, 0); grid.addWidget(self.label('feature.' + key), 0, 1, 1, 1 if key in ('tbu', 'splash') else 2)
+            help_button = QPushButton('?'); help_button.setObjectName('help'); help_button.setFixedSize(29, 29)
+            help_button.clicked.connect(lambda _checked=False, feature=key: self._show_help(feature)); grid.addWidget(help_button, 0, 3)
+            grid.setColumnStretch(1, 1)
+            if key == 'tbu':
+                self.driver_combo = QComboBox(); self.driver_combo.currentIndexChanged.connect(self._plan_changed)
+                self.driver_combo.setMinimumContentsLength(13)
+                self.driver_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+                grid.addWidget(self.driver_combo, 0, 2)
+            if key == 'splash':
+                radios = QWidget(); radio_layout = QHBoxLayout(radios); radio_layout.setContentsMargins(0, 0, 0, 0)
+                self.auto_splash_box = QRadioButton(); self.custom_splash_box = QRadioButton()
+                self.logo_group = QButtonGroup(self); self.logo_group.addButton(self.auto_splash_box); self.logo_group.addButton(self.custom_splash_box)
+                self.auto_splash_box.setChecked(True)
+                radio_layout.addWidget(self.auto_splash_box); radio_layout.addWidget(self.custom_splash_box)
+                self.custom_splash_box.clicked.connect(self._browse_splash)
+                self.auto_splash_box.toggled.connect(self._logo_mode_changed)
+                grid.addWidget(radios, 0, 2)
+                self.custom_image_label = QLabel(); self.custom_image_label.setWordWrap(True); grid.addWidget(self.custom_image_label, 2, 1, 1, 2)
+            rows.addWidget(host); self.feature_boxes[key] = box; self.na_labels[key] = na; self.help_buttons[key] = help_button
+        rows.addStretch()
+        self.tbu_box = self.feature_boxes['tbu']; self.sb_box = self.feature_boxes['secureboot']
+        self.optimized_box = self.feature_boxes['optimized']; self.overclock_box = self.feature_boxes['overclock']; self.splash_box = self.feature_boxes['splash']
+        right = QFrame(); right.setObjectName('card'); help_layout = QVBoxLayout(right); help_layout.setContentsMargins(18, 15, 18, 15)
+        self.help_title = self.label('help.title'); self.help_title.setStyleSheet('font-size:13pt;font-weight:650;'); help_layout.addWidget(self.help_title)
+        self.help_text = self.label('help.prompt'); self.help_text.setTextInteractionFlags(Qt.TextSelectableByMouse); help_layout.addWidget(self.help_text)
+        self.logo_preview = QLabel(); self.logo_preview.setAlignment(Qt.AlignCenter); self.logo_preview.setMaximumHeight(150); help_layout.addWidget(self.logo_preview)
+        help_layout.addStretch(); split.addWidget(table)
+        help_scroll = QScrollArea(); help_scroll.setWidgetResizable(True); help_scroll.setWidget(right)
+        split.addWidget(help_scroll); split.setSizes([550, 400]); layout.addWidget(split, 1)
+        row = QHBoxLayout(); self.driver_folder_label = QLabel(); self.driver_folder_label.setWordWrap(True)
+        row.addWidget(self.driver_folder_label, 1); self.refresh_profiles_btn = self.button('config.refresh_profiles', self._refresh_profiles_clicked); row.addWidget(self.refresh_profiles_btn)
+        layout.addLayout(row)
+
+    def _make_build_page(self):
+        layout = self.pages[4][1]; card = self._card(layout)
+        self.build_review = QLabel(); self.build_review.setWordWrap(True); card.addWidget(self.build_review)
+        card.addWidget(self.label('build.startup', name='muted'))
+        self.output_label = QLabel(); self.output_label.setWordWrap(True); card.addWidget(self.output_label)
+        self.output_btn = self.button('build.choose_output', self._browse_output); card.addWidget(self.output_btn, alignment=Qt.AlignLeft)
+        self.build_btn = self.button('build.start', self.start_build, primary=True); card.addWidget(self.build_btn, alignment=Qt.AlignLeft)
+        self.build_state_banner = QLabel(); self.build_state_banner.setWordWrap(True); layout.addWidget(self.build_state_banner)
+        self.build_progress = QProgressBar(); self.build_progress.setRange(0, 100); layout.addWidget(self.build_progress)
+        self.build_phase_label = QLabel(); self.build_phase_label.setWordWrap(True); layout.addWidget(self.build_phase_label)
+        self.build_log = QPlainTextEdit(); self.build_log.setReadOnly(True); layout.addWidget(self.build_log, 1)
+        self.open_report_btn = self.button('common.open_report', self._open_report); layout.addWidget(self.open_report_btn, alignment=Qt.AlignLeft)
+        self.output_path = None; self.output_manual = False; self.progress_tracker = None
+
+    def _make_finish_page(self):
+        layout = self.pages[5][1]; self.finish_status = QLabel(); self.finish_status.setWordWrap(True); layout.addWidget(self.finish_status)
+        row = QHBoxLayout(); self.save_btn = self.button('save.button', self.save_rom, primary=True)
+        self.flash_btn = self.button('save.flash', self.start_flash)
+        self.open_output_btn = self.button('common.open_folder', self._open_output_folder)
+        row.addWidget(self.save_btn); row.addWidget(self.flash_btn); row.addWidget(self.open_output_btn); row.addStretch(); layout.addLayout(row)
+        self.finish_fpt_status = QLabel(); self.finish_fpt_status.setWordWrap(True); layout.addWidget(self.finish_fpt_status)
+        self.fpt_status_labels.append(self.finish_fpt_status)
+        self.flash_view = OperationView(self); layout.addWidget(self.flash_view, 1)
+        self.saved_path = None
+
+    # ---- task lifetimes and language changes ----
+    def _launch(self, name, worker, callback):
+        if getattr(self, name + '_thread') is not None: return False
+        thread = QThread(self); setattr(self, name + '_thread', thread); setattr(self, name + '_worker', worker)
+        worker.moveToThread(thread); thread.started.connect(worker.run)
+        worker.finished.connect(callback); worker.finished.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(lambda: self._stopped(name))
+        thread.finished.connect(thread.deleteLater); thread.start(); self._refresh_state()
+        return True
+
+    def _stopped(self, name):
+        setattr(self, name + '_thread', None); setattr(self, name + '_worker', None)
+        if name == 'bios':
+            self._bios_running = False
+            result = self._fpt_result
+            if result and self._bios_mode == 'dump' and result.success:
+                self.own_dump_hashes.add(result.sha256); self.load_rom(result.output_path)
+            elif result and self._bios_mode == 'flash' and result.success:
+                self._delivery_complete = True
+        if name == 'download':
+            self._refresh_tools()
+            if self._download_result and self._download_result['success'] and self._download_name == 'fpt':
+                self._start_fpt_probe()
+        self._refresh_state(); self._resume_pending_open()
+        if self._closing and not self._any_thread_running(): self.close()
+
+    def _operation_busy(self):
+        return any(getattr(self, name + '_thread') is not None for name in ('inspect', 'logo', 'build', 'download', 'bios'))
+
+    def _any_thread_running(self):
+        return any(getattr(self, name + '_thread') is not None for name in ('cpu', 'inspect', 'logo', 'build', 'download', 'bios', 'probe'))
+
     def closeEvent(self, event):
         if self._operation_busy():
-            QMessageBox.information(self, "Operation in progress", "Wait for the active operation to finish before closing the toolkit.")
-            event.ignore()
+            self._message('common.busy'); event.ignore()
+        elif self._any_thread_running():
+            self._closing = True; event.ignore()
         else:
             event.accept()
 
-    def _make_overview_page(self) -> QWidget:
-        page, outer = self._page_header(
-            "Firmware overview",
-            "Open a firmware image and the toolkit will explain what it contains, what is supported, and what can be changed safely.",
-        )
-        overview_scroll = QScrollArea()
-        overview_scroll.setWidgetResizable(True)
-        overview_scroll.setFrameShape(QFrame.NoFrame)
-        overview_body = QWidget()
-        body_layout = QVBoxLayout(overview_body)
-        body_layout.setContentsMargins(0, 0, 8, 0)
-        body_layout.setSpacing(14)
-        overview_scroll.setWidget(overview_body)
-        outer.addWidget(overview_scroll, 1)
-        outer = body_layout
-        self.overview_banner = QLabel("Create a modified ROM, dump the installed BIOS, or flash with verified pre-flash backups.")
-        self.overview_banner.setObjectName("infoBanner")
-        self.overview_banner.setWordWrap(True)
-        outer.addWidget(self.overview_banner)
+    def _language_changed(self):
+        if self._initializing: return
+        code = self.language_combo.currentData()
+        try:
+            self.catalog.select(code)
+        except (OSError, ValueError):
+            self._message('error.language'); self.language_combo.blockSignals(True)
+            self.language_combo.setCurrentIndex(self.language_combo.findData(self.catalog.code)); self.language_combo.blockSignals(False); return
+        self.settings.setValue('language', code)
+        for widget, key in self._bindings: widget.setText(self.t(key))
+        self.setWindowTitle(self.t('app.title', version=__version__))
+        self._update_driver_labels(); self._refresh_tools(); self._populate_analysis()
+        self.dump_view.retranslate(); self.flash_view.retranslate()
+        if self._help_key: self._show_help(self._help_key)
+        self._refresh_state()
 
-        self.missing_tools_card = self._make_tools_card(missing_only=True)
-        outer.addWidget(self.missing_tools_card)
-        outer.addWidget(self._make_bios_access_card())
-        self.drop_zone = DropZone()
-        self.drop_zone.dropped.connect(self.load_rom)
-        outer.addWidget(self.drop_zone)
+    # ---- state, gates and navigation ----
+    def completed_steps(self):
+        first = self._all_tools_ready
+        second = first and self._source_ready
+        third = second and self.report is not None
+        fourth = third and self._config_complete
+        fifth = fourth and self.last_built_rom is not None and self._build_digest is not None
+        return [first, second, third, fourth, fifth, fifth and self._delivery_complete]
 
-        self.inspecting_card = QFrame()
-        self.inspecting_card.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        inspect_layout = QVBoxLayout(self.inspecting_card)
-        inspect_layout.setContentsMargins(20, 18, 20, 18)
-        self.inspecting_title = QLabel("Analyzing firmware…")
-        self.inspecting_title.setStyleSheet("font-size:13pt;font-weight:650;")
-        inspect_layout.addWidget(self.inspecting_title)
-        self.inspecting_text = QLabel("Reading the image and checking supported firmware structures.")
-        self.inspecting_text.setWordWrap(True)
-        inspect_layout.addWidget(self.inspecting_text)
-        self.inspecting_progress = QProgressBar()
-        self.inspecting_progress.setRange(0, 0)
-        inspect_layout.addWidget(self.inspecting_progress)
-        self.inspecting_card.hide()
-        outer.addWidget(self.inspecting_card)
+    def _set_nav(self, index):
+        self.stack.setCurrentIndex(index)
+        for i, button in enumerate(self.nav_buttons): button.setChecked(i == index)
+        self._refresh_state()
 
-        self.overview_content = QWidget()
-        content = QVBoxLayout(self.overview_content)
-        content.setContentsMargins(0, 0, 0, 0)
-        content.setSpacing(12)
+    def _continue(self, index):
+        if self._operation_busy(): return
+        if index == 3:
+            if not self._accept_configuration(): return
+        if not self.completed_steps()[index]: return
+        if index == 5: self.close()
+        else: self._set_nav(index + 1)
 
-        identity = QFrame()
-        identity.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        il = QGridLayout(identity)
-        il.setContentsMargins(18, 15, 18, 15)
-        self.rom_name_label = QLabel("No firmware loaded")
-        self.rom_name_label.setStyleSheet("font-size:15pt;font-weight:650;")
-        il.addWidget(self.rom_name_label, 0, 0)
-        self.recognition_label = QLabel("")
-        self.recognition_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        il.addWidget(self.recognition_label, 0, 1)
-        self.rom_meta_label = QLabel("")
-        self.rom_meta_label.setStyleSheet("color:#646a73;")
-        self.rom_meta_label.setWordWrap(True)
-        il.addWidget(self.rom_meta_label, 1, 0, 1, 2)
-        open_other = QPushButton("Open another firmware…")
-        open_other.clicked.connect(self._browse_rom)
-        il.addWidget(open_other, 2, 0, alignment=Qt.AlignLeft)
-        content.addWidget(identity)
+    def _refresh_state(self):
+        if self._initializing or self._updating: return
+        self._updating = True
+        try:
+            done = self.completed_steps(); busy = self._operation_busy()
+            for i in range(6):
+                enabled = (i == 0 or done[i - 1]) and not busy
+                # Analysis remains readable while its inspection is running.
+                self.page_bodies[i].setEnabled(enabled or (i == 2 and self.inspect_thread is not None))
+                self.nav_marks[i].setText(str(i + 1) + ('. ✓' if done[i] else '.'))
+                self.nav_marks[i].setStyleSheet('color:#198046;font-weight:700;' if done[i] else 'color:#64778b;font-weight:600;')
+                self.nav_labels[i].setText(self.t(f'step.{i+1}.title'))
+                gate = self.gate_labels[i]
+                locked = i > 0 and not done[i - 1]
+                gate.setVisible(locked or busy)
+                gate.setText(self.t('common.locked', number=i) if locked else self.t('common.busy'))
+                can_continue = done[i]
+                if i == 3: can_continue = done[2] and self._configuration_valid()
+                self.continue_buttons[i].setEnabled(bool(can_continue and not busy))
+            ready = self._all_tools_ready and not busy
+            self.drop_zone.setEnabled(ready); self.load_rom_btn.setEnabled(ready)
+            fpt_ready = bool(self.fpt_probe and self.fpt_probe.get('ready') and self.probe_thread is None)
+            self.dump_btn.setEnabled(ready and fpt_ready)
+            self.probe_button.setEnabled(ready and self.probe_thread is None)
+            self.recheck_tools_btn.setEnabled(not busy)
+            for key, (label, button) in self.tool_rows.items():
+                button.setEnabled(not busy and not self._tool_ready.get(key, False))
+            self.loaded_rom_label.setText(self.t('rom.selected', path=self.rom_path) if self.rom_path else self.t('common.none'))
+            self._update_fpt_status_labels(); self._refresh_configuration()
+            self.build_btn.setEnabled(done[3] and ready)
+            self.output_btn.setEnabled(done[3] and not busy)
+            self.build_state_banner.setText(self.t(self._last_build_status))
+            self.build_review.setText(self._review_text())
+            self.output_label.setText(self.t('build.destination', path=self.output_path) if self.output_path else '')
+            built = done[4]
+            self.save_btn.setEnabled(built and not busy)
+            self.flash_btn.setEnabled(built and ready and fpt_ready)
+            self.open_output_btn.setEnabled(built and not busy)
+            self.open_report_btn.setEnabled(bool(self.last_build_report and not busy))
+            if self.saved_path and self._delivery_complete:
+                self.finish_status.setText(self.t('save.success', path=self.saved_path))
+            else:
+                self.finish_status.setText(self.t('save.ready', path=self.last_built_rom) if built else self.t('status.not_built'))
+        finally:
+            self._updating = False
 
-        self.tbu_overview = FeatureCard(
-            "tbu",
-            "Turbo Boost Unlock",
-            "Lets supported Xeon E5 v3 processors use the firmware changes required for unlocked turbo behavior.",
-        )
-        self.sb_overview = FeatureCard(
-            "secureboot",
-            "Secure Boot factory keys",
-            "Checks the factory key set stored in the ROM and can update outdated/test defaults to the validated 2023-capable set.",
-        )
-        self.opt_overview = FeatureCard(
-            "optimized",
-            "Performance-oriented BIOS defaults",
-            PERFORMANCE_DEFAULTS_DESCRIPTION,
-        )
-        self.oc_overview = FeatureCard(
-            "overclock",
-            "Unlocked-multiplier overclocking",
-            "Applies the verified XD4 setup defaults and menu-access changes required for compatible unlocked CPUs.",
-        )
-        self.logo_overview = FeatureCard(
-            "splash",
-            "Boot logo",
-            "Replaces the firmware splash image and verifies the image embedded in the completed ROM.",
-        )
-        for card in (self.tbu_overview, self.sb_overview, self.opt_overview, self.oc_overview, self.logo_overview):
-            card.action_requested.connect(self._overview_action)
-            content.addWidget(card)
+    def _invalidate_build(self):
+        self._config_complete = False; self.last_built_rom = None; self._build_digest = None
+        self._delivery_complete = False; self.saved_path = None; self._last_build_status = 'build.idle'
 
-        integrity = QFrame()
-        integrity.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        gl = QGridLayout(integrity)
-        gl.setContentsMargins(18, 15, 18, 15)
-        title = QLabel("BIOS startup information")
-        title.setStyleSheet("font-size:12.5pt;font-weight:650;")
-        gl.addWidget(title, 0, 0)
-        self.fit_status_label = QLabel("Not checked")
-        self.fit_status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        gl.addWidget(self.fit_status_label, 0, 1)
-        desc = QLabel("The BIOS uses an internal list to find the CPU updates it needs at startup. The toolkit checks that this list points to the right files. If it finds a problem it knows how to fix, it corrects the list automatically when creating your modified BIOS. You do not need to repair it separately.")
-        desc.setWordWrap(True)
-        desc.setStyleSheet("color:#5f6368;")
-        gl.addWidget(desc, 1, 0, 1, 2)
-        content.addWidget(integrity)
+    # ---- required files ----
+    def _refresh_tools(self):
+        previous = self._all_tools_ready
+        groups = inventory.scan_tool_groups(); self._tool_ready = {}
+        for item in groups:
+            key = item['name']; self._tool_ready[key] = item['ready']
+            if key not in self.tool_rows: continue
+            label, button = self.tool_rows[key]
+            members = item['files']; count = sum(member['state'] == 'ready' for member in members)
+            state_key = 'common.ready' if item['ready'] else 'common.missing' if all(m['state'] == 'missing' for m in members) else 'common.incorrect'
+            text = self.t(state_key)
+            if len(members) > 1 and not item['ready'] and count: text = self.t('tools.partial', ready=count, total=len(members))
+            label.setText(text); label.setToolTip('\n'.join(m['name'] for m in members if m['state'] != 'ready'))
+            label.setStyleSheet('color:#188044;' if item['ready'] else 'color:#a52222;')
+            button.setText(self.t('tools.installed' if item['ready'] else 'tools.download'))
+        try:
+            from validate_build_inputs import validate
+            validate(app_directory() if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent)
+            self._resources_ready = True; self._resource_error = ''
+        except Exception as exc:
+            self._resources_ready = False; self._resource_error = str(exc)
+        self._all_tools_ready = bool(groups) and all(g['ready'] for g in groups) and self._resources_ready
+        self.tool_summary.setText(self.t('tools.resources_missing' if not self._resources_ready else 'tools.all_ready' if self._all_tools_ready else 'tools.required'))
+        self.tool_folder_label.setText(self.t('tools.folder', path=app_directory() / 'tools'))
+        if self._resource_error: self.tool_diagnostics.setPlainText(self._resource_error); self.tool_diagnostics.show()
+        if previous and not self._all_tools_ready: self._invalidate_build()
+        self._refresh_state()
 
-        create = QPushButton("Create modified ROM →")
-        create.setStyleSheet("QPushButton{background:#0f6cbd;color:white;border-color:#0f6cbd;font-weight:600;padding:10px 18px;} QPushButton:hover{background:#115ea3;}")
-        create.clicked.connect(lambda: self._set_nav(self.PAGE_CREATE))
-        row = QHBoxLayout()
-        row.addStretch(1)
-        row.addWidget(create)
-        content.addLayout(row)
-        self.overview_content.hide()
+    def _require_all_tools(self, *, notify=True):
+        self._refresh_tools()
+        if not self._all_tools_ready and notify: self._message('tools.required')
+        return self._all_tools_ready
 
-        outer.addWidget(self.overview_content)
-        outer.addStretch(1)
-        return page
+    def _rom_input_allowed(self):
+        return self._all_tools_ready and not self._operation_busy()
 
-    def _make_rom_page(self) -> QWidget:
-        page, layout = self._page_header(
-            "Load or dump a BIOS ROM",
-            "Open an existing ROM file, or save the BIOS installed on this computer as a ROM file.",
-        )
-        self.rom_tools_notice = QLabel("Install all required tools before loading or dumping a ROM. Use the Download buttons on Overview.")
-        self.rom_tools_notice.setObjectName('warningBanner')
-        self.rom_tools_notice.setWordWrap(True)
-        layout.addWidget(self.rom_tools_notice)
-        self.loaded_rom_label = QLabel('No ROM loaded yet.')
-        self.loaded_rom_label.setWordWrap(True)
-        layout.addWidget(self.loaded_rom_label)
-        self.load_rom_btn = QPushButton('Load ROM from file…')
-        self.load_rom_btn.clicked.connect(self._browse_rom)
-        layout.addWidget(self.load_rom_btn, alignment=Qt.AlignLeft)
-        layout.addWidget(self._make_bios_access_card())
-        tools_button = QPushButton('View required tools')
-        tools_button.clicked.connect(lambda: self._set_nav(self.PAGE_TOOLS))
-        layout.addWidget(tools_button, alignment=Qt.AlignLeft)
-        layout.addStretch(1)
-        return page
+    def _recheck_tools(self):
+        if self._operation_busy(): return
+        self._refresh_tools(); self.refresh_drivers()
+        if self._all_tools_ready: self._start_fpt_probe()
 
-    # ---------- create ROM ----------
-    def _make_create_page(self) -> QWidget:
-        page, outer = self._page_header(
-            "Create a modified ROM",
-            "Choose outcomes you want. The toolkit handles the firmware-specific implementation and performs integrity validation automatically.",
-        )
-        self.create_no_rom = QLabel("Install all required tools, then load or dump a ROM from Load / Dump ROM.")
-        self.create_no_rom.setObjectName("warningBanner")
-        outer.addWidget(self.create_no_rom)
+    def _download_tool(self, name):
+        if self._operation_busy(): return
+        self._download_name = name; self._download_result = None
+        self.tool_download_status.setText(self.t('tools.downloading', tool=inventory.GROUPS_BY_NAME[name].label))
+        worker = ToolDownloadWorker(name)
+        worker.progress.connect(lambda message: log('DOWNLOAD PROGRESS', message))
+        self._launch('download', worker, self._download_finished)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        body = QWidget()
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(0, 0, 8, 0)
-        bl.setSpacing(12)
+    def _download_finished(self, result):
+        self._download_result = result
+        if result['success']:
+            self.tool_download_status.setText(self.t('tools.success', tool=inventory.GROUPS_BY_NAME[self._download_name].label))
+        else:
+            self.tool_download_status.setText(self.t('tools.failure'))
+            self.tool_diagnostics.setPlainText(result.get('error', '')); self.tool_diagnostics.show()
+        # _stopped refreshes files and may probe FPT after the worker has ended.
 
-        source_card = QFrame()
-        source_card.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        sl = QGridLayout(source_card)
-        sl.setContentsMargins(18, 15, 18, 15)
-        sl.addWidget(QLabel("Source firmware"), 0, 0)
-        self.create_source_label = QLabel("None")
-        self.create_source_label.setStyleSheet("font-weight:600;")
-        sl.addWidget(self.create_source_label, 0, 1)
-        sl.addWidget(QLabel("Output file"), 1, 0)
-        self.output_edit = QLineEdit()
-        self.output_edit.textEdited.connect(lambda _text: setattr(self, "output_manual", True))
-        sl.addWidget(self.output_edit, 1, 1)
-        out_btn = QPushButton("Choose…")
-        out_btn.clicked.connect(self._browse_output)
-        sl.addWidget(out_btn, 1, 2)
-        bl.addWidget(source_card)
+    # ---- CPU and recommendations ----
+    def _cpu_finished(self, result):
+        self.cpu_detection = result
+        log('CPU', ' / '.join(p.name for p in result.processors) or result.error)
+        if self.recommended_mode.isChecked() and self.report: self._apply_recommended()
+        self._refresh_state()
 
-        self.tbu_build_card = self._make_build_feature_card(
-            "Turbo Boost Unlock",
-            "Apply the complete Turbo Boost Unlock firmware changes as one operation.",
-        )
-        tbu_layout = self.tbu_build_card.layout()
-        self.tbu_box = QCheckBox("Add Turbo Boost Unlock")
-        self.tbu_box.toggled.connect(self._tbu_selection_changed)
-        tbu_layout.addWidget(self.tbu_box)
-        tbu_row = QHBoxLayout()
-        tbu_row.addWidget(QLabel("Undervolt profile:"))
-        self.driver_combo = QComboBox()
-        self.driver_combo.currentIndexChanged.connect(self._plan_changed)
-        tbu_row.addWidget(self.driver_combo, 1)
-        tbu_layout.addLayout(tbu_row)
-        self.tbu_help = QLabel("The toolkit removes the required 06F2 microcode, updates every validated C-state default copy, installs the selected S3TurboHack payload, and verifies the result.")
-        self.tbu_help.setWordWrap(True)
-        self.tbu_help.setStyleSheet("color:#646a73;")
-        tbu_layout.addWidget(self.tbu_help)
-        bl.addWidget(self.tbu_build_card)
+    def driver_paths(self):
+        folder = app_directory() / 'drivers'
+        if not getattr(sys, 'frozen', False): folder = Path(__file__).resolve().parent.parent / 'drivers'
+        self.driver_folder = folder
+        result = []
+        for path in sorted(folder.glob('*.ffs')):
+            try: inspect_driver(path); result.append(path)
+            except Exception: pass
+        return result
 
-        self.sb_build_card = self._make_build_feature_card(
-            "Secure Boot factory keys",
-            "Update outdated/test factory defaults using the bundled validated 2023-capable key set.",
-        )
-        sb_layout = self.sb_build_card.layout()
-        self.sb_box = QCheckBox("Update factory Secure Boot keys")
-        self.sb_box.stateChanged.connect(self._plan_changed)
-        sb_layout.addWidget(self.sb_box)
-        self.sb_plan_label = QLabel("The toolkit evaluates the factory key databases independently and changes only what needs updating.")
-        self.sb_plan_label.setWordWrap(True)
-        self.sb_plan_label.setStyleSheet("color:#646a73;")
-        sb_layout.addWidget(self.sb_plan_label)
-        bl.addWidget(self.sb_build_card)
+    def refresh_drivers(self):
+        old = self.driver_combo.currentData(); self.driver_combo.blockSignals(True); self.driver_combo.clear()
+        self._driver_info = []
+        for path in self.driver_paths():
+            uv = inspect_driver(path).undervolt_mv; self._driver_info.append((path, uv)); self.driver_combo.addItem('', str(path))
+        self._update_driver_labels()
+        self._default_driver_index = next((i for i, (_, uv) in enumerate(self._driver_info)
+            if (uv['Core'], uv['Cache'], uv['System Agent']) == (-60, -50, -50)), -1)
+        index = self.driver_combo.findData(old) if old else -1
+        self.driver_combo.setCurrentIndex(index if index >= 0 else self._default_driver_index)
+        self.driver_combo.blockSignals(False)
+        if not self._initializing: self._plan_changed()
 
-        self.opt_build_card = self._make_build_feature_card(
-            "Performance-oriented BIOS defaults",
-            PERFORMANCE_DEFAULTS_DESCRIPTION,
-        )
-        opt_layout = self.opt_build_card.layout()
-        self.optimized_box = QCheckBox("Apply performance-oriented defaults")
-        self.optimized_box.stateChanged.connect(self._plan_changed)
-        opt_layout.addWidget(self.optimized_box)
-        self.opt_create_more = QToolButton()
-        self.opt_create_more.setText('What does this mean? ▾')
-        self.opt_create_more.clicked.connect(self._toggle_optimized_explanation)
-        opt_layout.addWidget(self.opt_create_more)
-        self.opt_create_detail = QLabel(performance_defaults_explanation())
-        self.opt_create_detail.setWordWrap(True)
-        self.opt_create_detail.hide()
-        opt_layout.addWidget(self.opt_create_detail)
-        bl.addWidget(self.opt_build_card)
+    def _update_driver_labels(self):
+        for i, (_, uv) in enumerate(getattr(self, '_driver_info', [])):
+            self.driver_combo.setItemText(i, self.t('config.uv_profile', core=uv['Core'], cache=uv['Cache'], agent=uv['System Agent']))
 
-        self.oc_build_card = self._make_build_feature_card(
-            "Unlocked-multiplier overclocking",
-            "Apply the verified XD4 defaults and AMIBCP access changes for compatible unlocked Haswell/Broadwell CPUs.",
-        )
-        oc_layout = self.oc_build_card.layout()
-        self.overclock_box = QCheckBox("Add unlocked-multiplier OC compatibility")
-        self.overclock_box.stateChanged.connect(self._plan_changed)
-        oc_layout.addWidget(self.overclock_box)
-        oc_note = QLabel(
-            "Disables Overclocking Lock, enables the PP0 current override, selects the HEDT unlimited-current value, and exposes OverClocking Feature, XE Ratio Limit and PP0 current-control menus."
-        )
-        oc_note.setWordWrap(True)
-        oc_note.setStyleSheet("color:#646a73;")
-        oc_layout.addWidget(oc_note)
-        bl.addWidget(self.oc_build_card)
+    def _refresh_profiles_clicked(self):
+        if self._operation_busy(): return
+        self.refresh_drivers()
+        if self.recommended_mode.isChecked(): self._apply_recommended()
 
-        self.logo_build_card = self._make_build_feature_card(
-            "Boot logo",
-            "Use SenorSpace automatically matched to the ROM, or choose a custom BMP. The finished image is re-extracted and verified.",
-        )
-        logo_layout = self.logo_build_card.layout()
-        self.splash_box = QCheckBox("Replace the firmware boot logo")
-        self.splash_box.stateChanged.connect(self._plan_changed)
-        self.splash_box.clicked.connect(self._remember_splash_choice)
-        logo_layout.addWidget(self.splash_box)
-        self.splash_check_label = QLabel('Logo compatibility is checked when a ROM is opened. Verified automatic replacement is selected by default; uncheck it to keep the original logo.')
-        self.splash_check_label.setWordWrap(True)
-        logo_layout.addWidget(self.splash_check_label)
-        self.auto_splash_box = QCheckBox("Automatically match SenorSpace to this ROM")
-        self.auto_splash_box.setChecked(True)
-        self.auto_splash_box.toggled.connect(self._splash_mode_changed)
-        logo_layout.addWidget(self.auto_splash_box)
-        logo_row = QHBoxLayout()
-        self.splash_edit = QLineEdit()
-        self.splash_edit.setReadOnly(True)
-        self.splash_edit.textChanged.connect(self._update_logo_preview)
-        logo_row.addWidget(self.splash_edit, 1)
-        splash_btn = QPushButton("Choose custom image…")
-        splash_btn.clicked.connect(self._browse_splash)
-        logo_row.addWidget(splash_btn)
-        logo_layout.addLayout(logo_row)
-        self.logo_preview = QLabel("No preview")
-        self.logo_preview.setFixedHeight(120)
-        self.logo_preview.setAlignment(Qt.AlignCenter)
-        self.logo_preview.setStyleSheet("background:#f0f2f4;border:1px solid #d8dce1;border-radius:6px;color:#6d7279;")
-        logo_layout.addWidget(self.logo_preview)
-        bl.addWidget(self.logo_build_card)
+    def _available(self):
+        result = firmware_availability(self.report)
+        result['tbu'] = result['tbu'] and bool(self.driver_combo.count())
+        result['splash'] = self._logo_verified()
+        return result
 
-        integrity = QFrame()
-        integrity.setStyleSheet("QFrame{background:#eef7ef;border:1px solid #c9dfcc;border-radius:10px;}")
-        il = QVBoxLayout(integrity)
-        il.setContentsMargins(18, 14, 18, 14)
-        title = QLabel("✓ Firmware integrity checks are automatic")
-        title.setStyleSheet("font-size:11.5pt;font-weight:650;color:#1d6b39;")
-        il.addWidget(title)
-        text = QLabel("The toolkit validates the completed image, preserves the input size, repairs FIT microcode pointers when required, and refuses to produce a successful build if the final integrity checks do not pass.")
-        text.setWordWrap(True)
-        il.addWidget(text)
-        bl.addWidget(integrity)
+    def _apply_recommended(self):
+        if not self.report: return
+        self._updating = True
+        try:
+            self.auto_splash_box.setChecked(True)
+            self.driver_combo.setCurrentIndex(self._default_driver_index)
+            selected = set(recommended_modifications(self.cpu_detection or CpuDetection(), self.report))
+            if self._default_driver_index < 0: selected.discard('tbu')
+            available = self._available()
+            for key, box in self.feature_boxes.items():
+                box.setChecked(key in selected and available[key])
+        finally:
+            self._updating = False
+        self._invalidate_build(); self._update_default_output(); self._refresh_state()
 
-        self.advanced_toggle = QToolButton()
-        self.advanced_toggle.setText("Advanced options ▾")
-        self.advanced_toggle.clicked.connect(self._toggle_advanced)
-        bl.addWidget(self.advanced_toggle, alignment=Qt.AlignLeft)
-        self.advanced_panel = QFrame()
-        self.advanced_panel.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        al = QGridLayout(self.advanced_panel)
-        al.setContentsMargins(18, 14, 18, 14)
-        self.preserve = QCheckBox("Keep intermediate stage ROMs for troubleshooting")
-        al.addWidget(self.preserve, 0, 0, 1, 3)
-        al.addWidget(QLabel("Secure Boot donor source:"), 1, 0)
-        self.donor_edit = QLineEdit()
-        al.addWidget(self.donor_edit, 1, 1)
-        donor_btn = QPushButton("Choose…")
-        donor_btn.clicked.connect(self._browse_donor)
-        al.addWidget(donor_btn, 1, 2)
-        donor_reset = QPushButton("Use bundled validated donors")
-        donor_reset.clicked.connect(self._use_bundled_donor)
-        al.addWidget(donor_reset, 2, 1, alignment=Qt.AlignLeft)
-        adv_note = QLabel("Custom donors are intended for expert use. They are still parsed and validated before use.")
-        adv_note.setStyleSheet("color:#646a73;")
-        adv_note.setWordWrap(True)
-        al.addWidget(adv_note, 3, 0, 1, 3)
-        self.advanced_panel.hide()
-        bl.addWidget(self.advanced_panel)
+    def _mode_changed(self, recommended):
+        if self._initializing or self._updating: return
+        if recommended: self._apply_recommended()
+        else: self._invalidate_build(); self._refresh_state()
 
-        review = QFrame()
-        review.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        rl = QVBoxLayout(review)
-        rl.setContentsMargins(18, 15, 18, 15)
-        review_title = QLabel("Review")
-        review_title.setStyleSheet("font-size:12.5pt;font-weight:650;")
-        rl.addWidget(review_title)
-        self.review_text = QLabel("Choose at least one change.")
-        self.review_text.setWordWrap(True)
-        rl.addWidget(self.review_text)
-        self.build_btn = QPushButton("Build and verify ROM")
-        self.build_btn.setStyleSheet("QPushButton{background:#0f6cbd;color:white;border-color:#0f6cbd;font-weight:600;padding:10px 18px;} QPushButton:hover{background:#115ea3;}")
-        self.build_btn.clicked.connect(self.start_build)
-        rl.addWidget(self.build_btn, alignment=Qt.AlignRight)
-        bl.addWidget(review)
-        bl.addStretch(1)
+    def _refresh_configuration(self):
+        cpu_name = self.cpu_detection.display_name if self.cpu_detection and self.cpu_detection.processors else self.t('config.cpu_unknown')
+        self.recommended_mode.setText(self.t('config.recommended', cpu=cpu_name))
+        self.custom_mode.setText(self.t('config.custom'))
+        recommended = self.recommended_mode.isChecked(); available = self._available()
+        editable = not recommended and not self._operation_busy()
+        for key, box in self.feature_boxes.items():
+            na = not available[key] or (recommended and key == 'tbu' and self._default_driver_index < 0)
+            box.setVisible(not na); self.na_labels[key].setVisible(na)
+            box.setEnabled(editable and available[key])
+            self.help_buttons[key].setToolTip(self.t('feature.' + key))
+        self.driver_combo.setEnabled(editable and available['tbu'] and self.tbu_box.isChecked())
+        self.auto_splash_box.setText(self.t('config.logo_recommended')); self.custom_splash_box.setText(self.t('config.logo_custom'))
+        self.auto_splash_box.setEnabled(editable); self.custom_splash_box.setEnabled(editable)
+        self.refresh_profiles_btn.setEnabled(editable)
+        self.driver_folder_label.setText(self.t('config.drivers_folder', path=self.driver_folder))
+        note = self.t('config.recommended_lock') if recommended else self.t('config.other_system')
+        if self.cpu_detection is None: note = self.t('config.cpu_checking') + '\n' + note
+        elif not self.cpu_detection.processors: note = self.t('config.cpu_unknown_detail') + '\n' + note
+        if recommended and self.cpu_detection and self.cpu_detection.recommend_tbu and self._default_driver_index < 0:
+            note += '\n' + self.t('config.no_default_driver')
+        if self.report and not any(box.isChecked() for box in self.feature_boxes.values()): note += '\n' + self.t('config.no_changes')
+        self.config_note.setText(note)
+        if self.logo_thread is not None: self.custom_image_label.setText(self.t('config.logo_checking'))
+        elif self.custom_splash_box.isChecked() and self._custom_logo:
+            self.custom_image_label.setText(str(self._custom_logo) + '\n' + (self.t('config.logo_ok') if self._logo_verified() else self.t('config.logo_failed', reason=self._logo_reason(self._custom_logo_result or {}))))
+        else: self.custom_image_label.setText('')
 
-        scroll.setWidget(body)
-        outer.addWidget(scroll, 1)
-        return page
-
-    def _make_build_feature_card(self, title: str, description: str) -> QFrame:
-        card = QFrame()
-        card.setStyleSheet("QFrame{background:white;border:1px solid #dfe2e6;border-radius:10px;}")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(18, 15, 18, 15)
-        layout.setSpacing(8)
-        label = QLabel(title)
-        label.setStyleSheet("font-size:12.5pt;font-weight:650;")
-        layout.addWidget(label)
-        desc = QLabel(description)
-        desc.setWordWrap(True)
-        desc.setStyleSheet("color:#5f6368;")
-        layout.addWidget(desc)
-        return card
-
-    # ---------- builds ----------
-    def _make_builds_page(self) -> QWidget:
-        page, outer = self._page_header(
-            "Builds",
-            "Build progress is shown in plain language. The full external-tool transcript remains available below for troubleshooting.",
-        )
-        self.build_state_banner = QLabel("No build has been started in this session.")
-        self.build_state_banner.setObjectName("infoBanner")
-        self.build_state_banner.setWordWrap(True)
-        outer.addWidget(self.build_state_banner)
-        self.build_progress = QProgressBar()
-        self.build_progress.setRange(0, 100)
-        self.build_progress.setValue(0)
-        outer.addWidget(self.build_progress)
-        self.build_steps = QTableWidget(0, 3)
-        self.build_steps.setHorizontalHeaderLabels(["Task", "Status", "Explanation"])
-        self.build_steps.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.build_steps.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.build_steps.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.build_steps.verticalHeader().setVisible(False)
-        outer.addWidget(self.build_steps, 1)
-        row = QHBoxLayout()
-        self.open_output_btn = QPushButton("Open output folder")
-        self.open_output_btn.clicked.connect(self._open_output_folder)
-        self.open_output_btn.setEnabled(False)
-        row.addWidget(self.open_output_btn)
-        self.open_report_btn = QPushButton("Open detailed report")
-        self.open_report_btn.clicked.connect(self._open_report)
-        self.open_report_btn.setEnabled(False)
-        self.open_diagnostics_btn = QPushButton("Open diagnostics")
-        self.open_diagnostics_btn.setEnabled(False)
-        self.open_diagnostics_btn.clicked.connect(self._open_diagnostics)
-        row.addWidget(self.open_report_btn)
-        row.addWidget(self.open_diagnostics_btn)
-        row.addStretch(1)
-        outer.addLayout(row)
-        self.log_toggle = QToolButton()
-        self.log_toggle.setText("Show technical log ▾")
-        self.log_toggle.clicked.connect(self._toggle_log)
-        outer.addWidget(self.log_toggle, alignment=Qt.AlignLeft)
-        self.build_log = QPlainTextEdit()
-        self.build_log.setReadOnly(True)
-        self.build_log.hide()
-        self.build_log.setMaximumHeight(220)
-        outer.addWidget(self.build_log)
-        return page
-
-    # ---------- technical ----------
-    def _make_technical_page(self) -> QWidget:
-        page, outer = self._page_header(
-            "Technical details",
-            "Byte-level and firmware-structure information is kept here so experts can audit what the toolkit detected without forcing beginners to interpret it.",
-        )
-        self.tech_meta = QPlainTextEdit()
-        self.tech_meta.setReadOnly(True)
-        self.tech_meta.setMaximumHeight(150)
-        self.tech_meta.setPlainText("No firmware loaded.")
-        outer.addWidget(self.tech_meta)
-        self.tech_table = QTableWidget(0, 4)
-        self.tech_table.setHorizontalHeaderLabels(["Category", "Check", "Result", "Details"])
-        self.tech_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.tech_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.tech_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tech_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.tech_table.verticalHeader().setVisible(False)
-        outer.addWidget(self.tech_table, 1)
-        return page
-
-    # ---------- ROM loading / inspection ----------
-    def _browse_rom(self) -> None:
-        if self._operation_busy() or not self._require_all_tools():
-            return
-        path, _ = QFileDialog.getOpenFileName(self, "Open firmware image", "", "Firmware images (*.rom *.ROM *.bin *.BIN)")
-        if path:
-            self.load_rom(path)
-
-    def load_rom(self, path_string: str) -> None:
-        if self._operation_busy():
-            log('GUI', 'Source change rejected while another operation is active')
-            return
-        if not self._require_all_tools():
-            return
-        path = Path(path_string).resolve()
-        if not path.is_file():
-            QMessageBox.warning(self, "Firmware file not found", "The selected file no longer exists.")
-            return
-        if path.suffix.lower() not in (".rom", ".bin"):
-            QMessageBox.warning(self, "Unsupported file type", "Choose a .ROM or .BIN firmware image.")
-            return
-        self.rom_path = path
-        self.report = None
-        self.loaded_rom_label.setText('Selected ROM: ' + str(path))
-        self._set_nav(self.PAGE_OVERVIEW)
-        self.output_manual = False
-        self._set_loaded_state(False, inspecting=True)
-        self.drop_zone.hide()
-        self.inspecting_card.show()
-        self.inspecting_title.setText("Analyzing firmware…")
-        self.inspecting_text.setText(f"Reading {path.name} and checking Turbo Boost Unlock, Secure Boot defaults, BIOS defaults, firmware integrity and boot logo compatibility on a temporary copy.")
-        self._start_inspection(path)
-
-    def _start_inspection(self, path: Path) -> None:
-        if self.inspect_thread is not None or not self._require_all_tools():
-            return
-        self.inspect_thread = QThread()
-        self.inspect_worker = InspectWorker(path)
-        self.inspect_worker.moveToThread(self.inspect_thread)
-        self.inspect_thread.started.connect(self.inspect_worker.run)
-        self.inspect_worker.finished.connect(self._inspection_finished)
-        self.inspect_worker.finished.connect(self.inspect_thread.quit)
-        self.inspect_thread.finished.connect(self.inspect_thread.deleteLater)
-        self.inspect_thread.finished.connect(self._clear_inspection_thread)
-        self.inspect_worker.finished.connect(self.inspect_worker.deleteLater)
-        self._sync_busy_controls()
-        self.inspect_thread.start()
-
-    def _clear_inspection_thread(self) -> None:
-        self.inspect_thread = None
-        self.inspect_worker = None
-        self._sync_busy_controls()
-        self._resume_pending_open()
-
-    def _inspection_finished(self, report, error: str) -> None:
-        self.inspecting_card.hide()
-        if report is None:
-            self.drop_zone.show()
-            self._set_loaded_state(False)
-            msg = self._friendly_exception(error)
-            QMessageBox.critical(self, "Firmware could not be analyzed", msg)
-            return
-        if self._splash_choice_rom_hash != report.rom_sha256:
-            self._splash_user_choice = None
-        self._splash_choice_rom_hash = report.rom_sha256
-        self.report = report
-        if self._tbu_rom_sha256 != report.rom_sha256:
-            self._tbu_acknowledged = False
-            self.tbu_box.setChecked(False)
-        self._tbu_rom_sha256 = report.rom_sha256
-        self._set_loaded_state(True)
-        self._populate_overview()
-        self._populate_technical()
-        self._configure_create_options()
+    def _feature_changed(self, key, checked):
+        if self._initializing or self._updating: return
+        if key == 'splash': self._splash_user_choice = bool(checked)
+        if key == 'tbu': self._tbu_acknowledged = False
+        if key == 'tbu' and checked and not self.recommended_mode.isChecked():
+            if not self._confirm_tbu():
+                self.tbu_box.blockSignals(True); self.tbu_box.setChecked(False); self.tbu_box.blockSignals(False)
         self._plan_changed()
 
-    def _set_loaded_state(self, loaded: bool, inspecting: bool = False) -> None:
-        self.overview_content.setVisible(loaded)
-        self.create_no_rom.setVisible(not loaded)
-        self.nav_buttons[self.PAGE_CREATE].setEnabled(loaded)
-        self.nav_buttons[self.PAGE_TECHNICAL].setEnabled(loaded)
-        if not loaded and not inspecting:
-            self.drop_zone.show()
-        if loaded:
-            self.drop_zone.hide()
-        self._apply_rom_tool_gate()
+    def _plan_changed(self, *args):
+        if self._initializing or self._updating: return
+        self._invalidate_build(); self._update_default_output(); self._refresh_state()
 
-    def _populate_overview(self) -> None:
-        assert self.report is not None and self.rom_path is not None
-        r = self.report
-        self.rom_name_label.setText(self.rom_path.name)
-        layout = r.tbu.get("cstates", {}).get("amitse_setup_default", {}).get("layout") or "unknown"
-        fully = bool(
-            r.tbu.get("cstates", {}).get("supported")
-            and r.secure_boot.get("all_variables_valid")
-            and r.fit.get("supported")
-        )
-        self.recognition_label.setText("✓ Supported firmware structure" if fully else "⚠ Partially recognized")
-        self.recognition_label.setStyleSheet("color:#1d6b39;font-weight:650;" if fully else "color:#8a5b00;font-weight:650;")
-        self.rom_meta_label.setText(
-            f"{r.rom_size / (1024*1024):.1f} MiB  •  Firmware layout: {layout}  •  SHA-256: {r.rom_sha256}"
-        )
+    def _configuration_valid(self):
+        if not self.report or not self._all_tools_ready or self.logo_thread is not None: return False
+        if self.recommended_mode.isChecked() and self.cpu_detection is None: return False
+        available = self._available()
+        if any(box.isChecked() and not available[key] for key, box in self.feature_boxes.items()): return False
+        if self.tbu_box.isChecked() and not self.driver_combo.currentData(): return False
+        return True
 
-        tbu_status = r.tbu.get("status")
-        tbu_supported = bool(r.tbu.get("cstates", {}).get("supported") and r.tbu.get("target_count") == 1)
-        if tbu_status == "PASS":
-            uv = r.tbu.get("undervolt_mv") or {}
-            self.tbu_overview.set_state(
-                f"Installed ({uv.get('Core')}/{uv.get('Cache')}/{uv.get('System Agent')} mV)",
-                "good",
-                "Change profile",
-                tbu_supported,
-                "Turbo Boost Unlock is complete only when the S3TurboHack payload, the required microcode state, and all validated C-state default copies agree. This ROM passes those checks.",
-            )
-        elif tbu_status in ("NOT_APPLIED", "PARTIAL"):
-            self.tbu_overview.set_state(
-                "Not installed" if tbu_status == "NOT_APPLIED" else "Incomplete",
-                "info" if tbu_status == "NOT_APPLIED" else "warn",
-                "Add to build" if tbu_status == "NOT_APPLIED" else "Repair in build",
-                tbu_supported,
-                "The toolkit treats Turbo Boost Unlock as one complete operation: remove the required 06F2 microcode, update all validated C-state default copies, install the selected ser8989 payload, then verify the combined result.",
-            )
-        else:
-            self.tbu_overview.set_state("Cannot determine", "bad", "Unavailable", False, str(r.tbu.get("error", "The expected firmware structure was not recognized.")))
-
-        sb = r.secure_boot
-        if not sb.get("all_variables_valid"):
-            self.sb_overview.set_state("Cannot update safely", "bad", "Unavailable", False, "The required Secure Boot variable files could not all be parsed unambiguously, so the toolkit will not guess.")
-        elif sb.get("has_complete_2023_set") and not sb.get("has_ami_test_pk"):
-            self.sb_overview.set_state("Already up to date", "good", "Already up to date", False, "This ROM already contains the required 2023 Secure Boot factory keys and has no AMI test Platform Key. No update is needed.")
-        else:
-            reason = []
-            if sb.get("has_ami_test_pk"):
-                reason.append("AMI test Platform Key detected")
-            if not sb.get("has_complete_2023_set"):
-                reason.append("2023 KEK/db set incomplete")
-            self.sb_overview.set_state("Update recommended", "warn", "Add update", True, "; ".join(reason) + ". The toolkit changes only factory-key databases that require updating.")
-
-        opt = r.optimized
-        explanation = performance_defaults_explanation(opt)
-        if opt.get("supported") and opt.get("matches"):
-            self.opt_overview.set_state("Already applied", "good", "Already applied", False, explanation)
-        elif opt.get("supported"):
-            self.opt_overview.set_state("Not applied", "info", "Add to build", True, explanation)
-        else:
-            self.opt_overview.set_state("Not available for this firmware", "muted", "Unavailable", False,
-                '<p>This ROM uses a BIOS layout that is not supported for these default changes.</p>' + explanation)
-
-        oc = r.overclock
-        if oc.get("supported") and oc.get("matches"):
-            self.oc_overview.set_state(
-                "Applied", "good", "Already applied", False,
-                "The verified defaults, mirrored IntelSetup copy and eight AMIBCP default/access bytes all match the XD4 OC reference.",
-            )
-        elif oc.get("supported"):
-            self.oc_overview.set_state(
-                "Not applied", "info", "Add to build", True,
-                "This XD3/XD4 firmware layout has a verified mapping for OC defaults and menu access.",
-            )
-        else:
-            self.oc_overview.set_state(
-                "Not available for this firmware", "muted", "Unavailable", False,
-                oc.get("error", "No validated XD4 overclocking mapping exists for this layout."),
-            )
-
-        tools = discover_tools()
-        self.logo_overview.description.setText('Choose SenorSpace or a custom BMP as the picture shown when the computer starts.')
-        if tools.changelogo and r.splash.get('supported'):
-            logo_status = 'SenorSpace already installed' if r.splash.get('already_present') else 'Logo replacement supported'
-            self.logo_overview.set_state(logo_status, "good", "Review logo option", True, r.splash['reason'] + ' Selected by default; uncheck Replace the firmware boot logo to keep the existing logo.')
-        elif tools.changelogo:
-            reason = logo_check_failure_reason(r.splash.get('reason', ''))
-            self.logo_overview.description.setText('Logo check failed: ' + reason)
-            self.logo_overview.set_state("Logo check failed", "warn", "Review logo option", True,
-                reason + ' Logo replacement is unchecked until you choose it. Any build must still pass the final logo checks.')
-        else:
-            self.logo_overview.set_state("Required tool missing", "warn", "Unavailable", False, "Install ChangeLogo in Required tools before continuing with this ROM.")
-
-        fit = r.fit
-        if fit.get("status") == "PASS":
-            self.fit_status_label.setText("✓ No correction needed")
-            self.fit_status_label.setStyleSheet("color:#1d6b39;font-weight:650;")
-        elif fit.get("repairable"):
-            self.fit_status_label.setText("⚠ Will be corrected in the new BIOS")
-            self.fit_status_label.setStyleSheet("color:#8a5b00;font-weight:650;")
-        else:
-            self.fit_status_label.setText("✕ Cannot correct automatically")
-            self.fit_status_label.setStyleSheet("color:#a12a2a;font-weight:650;")
-
-    def _configure_create_options(self) -> None:
-        assert self.report is not None and self.rom_path is not None
-        self.create_source_label.setText(self.rom_path.name)
-        r = self.report
-        tbu_supported = bool(r.tbu.get("cstates", {}).get("supported") and r.tbu.get("target_count") == 1 and self.driver_combo.count())
-        self.tbu_box.setEnabled(tbu_supported)
-        self.driver_combo.setEnabled(tbu_supported)
-        if not tbu_supported:
-            self.tbu_box.setChecked(False)
-            self.tbu_help.setText("Turbo Boost Unlock is unavailable because this firmware structure is not fully recognized or no validated payloads were found.")
-        else:
-            self.tbu_help.setText("The toolkit removes the required 06F2 microcode, updates every validated C-state default copy, installs the selected S3TurboHack payload, and verifies the result.")
-
-        sb_supported = bool(r.secure_boot.get("all_variables_valid") and Path(self.donor_edit.text()).exists())
-        self.sb_box.setEnabled(sb_supported)
-        if not sb_supported:
-            self.sb_box.setChecked(False)
-        rec = r.secure_boot.get("recommended_patch_mode", "unknown")
-        if rec == "none":
-            self.sb_plan_label.setText("The ROM already contains the validated factory key set. No Secure Boot update is required.")
-        else:
-            self.sb_plan_label.setText(f"Recommended update: {rec}. Factory-key databases are evaluated independently and only outdated/test defaults are replaced.")
-
-        self.opt_create_detail.setText(performance_defaults_explanation(r.optimized))
-        self.optimized_box.setEnabled(bool(r.optimized.get("supported")))
-        if not r.optimized.get("supported"):
-            self.optimized_box.setChecked(False)
-
-        self.overclock_box.setEnabled(bool(r.overclock.get("supported")))
-        if not r.overclock.get("supported"):
-            self.overclock_box.setChecked(False)
-
-        self._configure_splash_option()
-
-        self._update_default_output()
-
-    def _remember_splash_choice(self, checked):
-        self._splash_user_choice = bool(checked)
-
-    def _configure_splash_option(self):
-        tool = discover_tools().changelogo
-        available = tool is not None
-        trial = self.report.splash
-        try:
-            eligible = bool(available and trial.get('supported')
-                            and trial.get('source_sha256') == self.report.rom_sha256
-                            and trial.get('tool_sha256') == sha256_file(tool))
-        except OSError:
-            eligible = False
-        self.splash_box.setEnabled(available)
-        checked = self._splash_user_choice if self._splash_user_choice is not None else eligible
-        self.splash_box.setChecked(bool(available and checked))
-        if eligible:
-            self.splash_check_label.setText(('SenorSpace is already installed. ' if trial.get('already_present') else 'Logo replacement passed its compatibility check. ')
-                                           + 'Uncheck this option to keep the original logo.')
-        else:
-            self.splash_check_label.setText('Logo check failed: ' + logo_check_failure_reason(trial.get('reason', ''))
-                                           + ' Replacement is unchecked by default.')
-
-    def _populate_technical(self) -> None:
-        assert self.report is not None and self.rom_path is not None
-        r = self.report
-        self.tech_meta.setPlainText(
-            f"ROM: {r.rom_path}\n"
-            f"Size: {r.rom_size} bytes\n"
-            f"SHA-256: {r.rom_sha256}\n"
-            f"Inspection reports: {self.rom_path.with_suffix('.inspection.txt')} / .inspection.json"
-        )
-        self.tech_table.setRowCount(0)
-        for item in r.rows:
-            row = self.tech_table.rowCount()
-            self.tech_table.insertRow(row)
-            for column, key in enumerate(("category", "check", "result", "details")):
-                self.tech_table.setItem(row, column, QTableWidgetItem(str(item.get(key, ""))))
-
-    def _toggle_optimized_explanation(self):
-        visible = not self.opt_create_detail.isVisible()
-        self.opt_create_detail.setVisible(visible)
-        self.opt_create_more.setText('Hide explanation ▴' if visible else 'What does this mean? ▾')
-
-    def _clear_tbu_selection(self):
-        was_blocked = self.tbu_box.blockSignals(True)
-        try:
-            self.tbu_box.setChecked(False)
-        finally:
-            self.tbu_box.blockSignals(was_blocked)
-        self._tbu_acknowledged = False
-
-    def _confirm_tbu_selection(self):
-        answer = QMessageBox.warning(self, 'Turbo Boost Unlock CPU compatibility', TBU_CPU_WARNING,
-                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        self._tbu_acknowledged = answer == QMessageBox.Yes
-        if not self._tbu_acknowledged:
-            self._clear_tbu_selection()
+    def _confirm_tbu(self):
+        if self._tbu_acknowledged: return True
+        self._tbu_acknowledged = self._message('config.tbu_warning', title='config.tbu_warning_title', confirm=True)
         return self._tbu_acknowledged
 
-    def _tbu_selection_changed(self, checked):
-        if checked:
-            if self._require_all_tools():
-                self._confirm_tbu_selection()
-            else:
-                self._clear_tbu_selection()
+    def _accept_configuration(self):
+        if not self._require_all_tools() or not self._configuration_valid(): return False
+        if self.tbu_box.isChecked() and not self._confirm_tbu(): return False
+        self._config_complete = True; self._update_default_output(); self._refresh_state(); return True
+
+    def _show_help(self, key):
+        self._help_key = key; self.help_title.setText(self.t('feature.' + key)); self.logo_preview.clear()
+        if key == 'optimized':
+            from .optimized import OPTIMIZED_SETTINGS
+            settings = self.report.optimized.get('settings') if self.report else None
+            paragraphs = [self.t('help.optimized_intro')]
+            for setting in settings or OPTIMIZED_SETTINGS:
+                target = {'Disable': 'setting.disabled', 'Enable': 'setting.enabled', 'Performance': 'setting.performance', 'BIOS': 'setting.bios'}.get(setting['desired_label'])
+                value = self.t(target) if target else setting['desired_label']
+                paragraphs.append(self.t('help.setting', name=setting['name'], value=value, reason=self.t('reason.' + setting['name'])))
+            paragraphs.append(self.t('help.optimized_end')); self.help_text.setText('\n\n'.join(paragraphs))
         else:
-            self._tbu_acknowledged = False
+            self.help_text.setText(self.t('help.' + key))
+        if key == 'splash':
+            image = self._custom_logo if self.custom_splash_box.isChecked() else self._asset('assets/SenorSpace.bmp')
+            if image:
+                pix = QPixmap(str(image))
+                if not pix.isNull(): self.logo_preview.setPixmap(pix.scaled(320, 145, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+    # ---- ROM input and analysis ----
+    def dragEnterEvent(self, event):
+        if self._rom_input_allowed() and _dropped_file(event): event.acceptProposedAction()
+        else: event.ignore()
+
+    def dragMoveEvent(self, event): self.dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        path = _dropped_file(event)
+        if path and self._rom_input_allowed() and self._require_all_tools(notify=False):
+            self.load_rom(path); event.acceptProposedAction()
+        else: event.ignore()
+
+    def _browse_rom(self):
+        if self._operation_busy() or not self._require_all_tools(): return
+        path = self._file_dialog('rom.choose', 'rom.filter')
+        if path: self.load_rom(path)
+
+    def load_rom(self, path_string):
+        if self._operation_busy() or not self._require_all_tools(): return
+        path = Path(path_string).resolve()
+        if not path.is_file() or path.suffix.lower() not in ('.rom', '.bin'):
+            self._message('rom.load_invalid'); return
+        self._invalidate_build(); self.rom_path = path; self.report = None; self._source_ready = True
+        self._updating = True
+        self.recommended_mode.setChecked(True); self.auto_splash_box.setChecked(True)
+        self._updating = False
+        self._tbu_acknowledged = False; self._splash_user_choice = None; self._custom_logo = None; self._custom_logo_result = None
+        self.output_manual = False; self.output_path = None
+        self.analysis_status.setText(self.t('analysis.start')); self.analysis_diagnostics.clear(); self._set_nav(self.PAGE_ANALYSIS)
+        self._launch('inspect', InspectWorker(path), self._inspection_finished)
+
+    def _inspection_finished(self, report, error):
+        self.report = report
+        if not report:
+            self.analysis_status.setText(self.t('analysis.failed')); self.analysis_diagnostics.setPlainText(error)
+            self._refresh_state(); return
+        self.analysis_status.setText(self.t('analysis.finished'))
+        self._populate_analysis()
+        if self.recommended_mode.isChecked(): self._apply_recommended()
+        else:
+            self._updating = True
+            try:
+                available = self._available()
+                for key, box in self.feature_boxes.items(): box.setChecked(key == 'splash' and available[key])
+            finally: self._updating = False
+        self._update_default_output(); self._refresh_state()
+
+    def _populate_analysis(self):
+        if not self.report: return
+        r = self.report; available = firmware_availability(r)
+        for key in FEATURES:
+            status = 'common.not_applied'
+            if not available[key]: status = 'common.unavailable'
+            elif key == 'tbu': status = 'common.already' if r.tbu.get('status') == 'PASS' else 'analysis.tbu_partial' if r.tbu.get('status') == 'PARTIAL' else status
+            elif key == 'secureboot': status = 'analysis.sb_current' if r.secure_boot.get('has_complete_2023_set') and not r.secure_boot.get('has_ami_test_pk') else 'analysis.sb_update'
+            elif key in ('optimized', 'overclock'): status = 'common.already' if getattr(r, key).get('matches') else status
+            elif key == 'splash': status = 'analysis.logo_current' if r.splash.get('already_present') else 'analysis.logo_ready'
+            self.analysis_rows[key].setText(self.t(status))
+            self.analysis_rows[key].setStyleSheet('color:#1d7c43;' if status in ('common.already', 'analysis.sb_current', 'analysis.logo_current', 'analysis.logo_ready') else 'color:#5b7087;')
+        self.analysis_meta.setText(self.t('analysis.hash', size=f'{r.rom_size/(1024*1024):.1f}', sha=r.rom_sha256))
+        fit_key = 'analysis.startup_ok' if r.fit.get('status') == 'PASS' else 'analysis.startup_repair' if r.fit.get('repairable') else 'analysis.startup_bad'
+        self.fit_status_label.setText(self.t(fit_key))
+        self.analysis_logo_reason.setText('' if r.splash.get('supported') else self.t('config.logo_failed', reason=self._logo_reason(r.splash)))
+        self.analysis_diagnostics.setPlainText('\n'.join(str(row) for row in r.rows) + '\n' + '\n'.join(r.errors) + '\n' + str(r.splash.get('reason', '')))
+
+    def _asset(self, relative):
+        root = app_directory() if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent.parent
+        return root / relative
+
+    def _logo_verified(self):
+        if not self.report: return False
+        trial = self.report.splash if self.auto_splash_box.isChecked() else self._custom_logo_result or {}
+        tool = discover_tools().changelogo
+        try:
+            valid = bool(tool and trial.get('supported') and trial.get('source_sha256') == self.report.rom_sha256 and trial.get('tool_sha256') == sha256_file(tool))
+            if self.custom_splash_box.isChecked():
+                valid = valid and bool(self._custom_logo and trial.get('image_sha256') == sha256_file(self._custom_logo))
+            return valid
+        except OSError: return False
+
+    def _logo_reason(self, trial):
+        raw = trial.get('reason', '')
+        if 'ROM is byte-identical' in raw: return self.t('config.logo_no_change')
+        if 'test-fit command' in raw: return self.t('config.logo_no_fit')
+        return self.t('config.logo_generic')
+
+    def _logo_mode_changed(self, automatic):
+        if self._initializing or self._updating: return
+        self._updating = True
+        try: self.splash_box.setChecked(automatic and self._logo_verified())
+        finally: self._updating = False
         self._plan_changed()
 
-    # ---------- plan ----------
-    def _overview_action(self, key: str) -> None:
-        if self._operation_busy() or not self._require_all_tools():
-            return
-        self._set_nav(self.PAGE_CREATE)
-        if key == "tbu" and self.tbu_box.isEnabled():
-            self.tbu_box.setChecked(True)
-        elif key == "secureboot" and self.sb_box.isEnabled():
-            self.sb_box.setChecked(True)
-        elif key == "optimized" and self.optimized_box.isEnabled():
-            self.optimized_box.setChecked(True)
-        elif key == "overclock" and self.overclock_box.isEnabled():
-            self.overclock_box.setChecked(True)
-        elif key == "splash" and self.splash_box.isEnabled():
-            self._remember_splash_choice(True)
-            self.splash_box.setChecked(True)
+    def _browse_splash(self):
+        if self.recommended_mode.isChecked() or self._operation_busy() or not self.report: return
+        path = self._file_dialog('config.logo_choose', 'config.logo_filter')
+        if not path:
+            self.auto_splash_box.setChecked(True); return
+        self.custom_splash_box.setChecked(True)
+        self.auto_splash_box.setChecked(False)
+        self._custom_logo = Path(path).resolve(); self._custom_logo_result = None
+        self.splash_box.setChecked(False); self._invalidate_build()
+        self._launch('logo', LogoWorker(self.rom_path, self.report.rom_sha256, self._custom_logo), self._custom_logo_finished)
 
-    def _plan_changed(self, *args) -> None:
-        if not self.report or not self.rom_path:
-            self.review_text.setText("Open a firmware image first.")
-            self.build_btn.setEnabled(False)
-            return
+    def _custom_logo_finished(self, result):
+        self._custom_logo_result = result
+        self.splash_box.setChecked(self._logo_verified())
+        if not result.get('supported'): self.analysis_diagnostics.appendPlainText(str(result.get('reason', '')))
+        self._refresh_state()
+
+    # ---- build and save ----
+    def _plan(self):
+        return dict(**{key: box.isChecked() for key, box in self.feature_boxes.items()},
+            driver=self.driver_combo.currentData() if self.tbu_box.isChecked() else None,
+            image=str(self._custom_logo) if self.splash_box.isChecked() and self.custom_splash_box.isChecked() else None)
+
+    def _review_text(self):
+        choices = [self.t('feature.' + key) for key in FEATURES if self.feature_boxes[key].isChecked()]
+        return self.t('build.review', changes='\n'.join('• ' + value for value in choices)) if choices else self.t('build.copy')
+
+    def _update_default_output(self):
+        if not self.rom_path or self.output_manual: return
+        self.output_path = default_output(self.rom_path, apply_tbu=self.tbu_box.isChecked(), apply_secureboot=self.sb_box.isChecked(),
+            apply_optimized=self.optimized_box.isChecked(), apply_overclock=self.overclock_box.isChecked(), apply_splash=self.splash_box.isChecked(), repair_fit=True)
+
+    def _browse_output(self):
+        if self._operation_busy(): return
+        path = self._file_dialog('build.choose_output', 'rom.filter', save=True, start=str(self.output_path or ''))
+        if path:
+            self.output_path = Path(path); self.output_manual = True; self._refresh_state()
+
+    def start_build(self):
+        if self._operation_busy() or not self._require_all_tools() or not self.completed_steps()[3]: return
+        if not self._configuration_valid(): self._invalidate_build(); self._refresh_state(); return
+        if self.tbu_box.isChecked() and not self._confirm_tbu(): return
+        if sha256_file(self.rom_path) != self.report.rom_sha256:
+            self._invalidate_build(); self._message('error.changed'); return
         self._update_default_output()
-        changes: list[str] = []
-        if self.tbu_box.isChecked():
-            profile = self.driver_combo.currentText() or "selected profile"
-            changes.append(f"• Turbo Boost Unlock — {profile}")
-        if self.sb_box.isChecked():
-            changes.append("• Update outdated/test factory Secure Boot keys")
-        if self.optimized_box.isChecked():
-            changes.append("• Apply performance-oriented default settings in BIOS")
-        if self.overclock_box.isChecked():
-            changes.append("• Add verified XD4 unlocked-multiplier OC defaults and menu access")
-        if self.splash_box.isChecked():
-            image = "SenorSpace (automatically matched to the ROM)" if self.auto_splash_box.isChecked() else (Path(self.splash_edit.text()).name if self.splash_edit.text().strip() else "no image selected")
-            changes.append(f"• Replace the firmware boot logo — {image}")
-        fit_needed = self.report.fit.get("status") != "PASS"
-        if fit_needed:
-            changes.append("• Check and correct the BIOS's CPU-update list")
-        if not changes:
-            self.review_text.setText("Choose at least one firmware change. Integrity validation will run automatically during every build.")
-            self.build_btn.setEnabled(False)
-        else:
-            self.review_text.setText(
-                "The original ROM will not be modified. A new image will be created with:\n\n"
-                + "\n".join(changes)
-                + "\n\nThe completed ROM must preserve the input size and pass the toolkit's final inspection before the build is reported as successful."
-            )
-            valid = True
-            if self.tbu_box.isChecked() and not self.driver_combo.currentData():
-                valid = False
-            if self.sb_box.isChecked() and not Path(self.donor_edit.text()).exists():
-                valid = False
-            if self.splash_box.isChecked() and not self.auto_splash_box.isChecked() and not Path(self.splash_edit.text()).is_file():
-                valid = False
-            self.build_btn.setEnabled(valid and self._rom_input_allowed())
+        output = self.output_path
+        if output.resolve() == self.rom_path.resolve() or (output.exists() and self.rom_path.samefile(output)):
+            self._message('error.source_output'); return
+        if output.exists() and not self._message('save.overwrite', confirm=True, path=output): return
+        self._delivery_complete = False; self.saved_path = None; self.last_built_rom = None; self._build_digest = None
+        self._build_plan = self._plan(); self._last_build_status = 'build.running'; self.build_log.clear(); self.build_progress.setValue(0)
+        self._driver_hash_at_build = sha256_file(Path(self.driver_combo.currentData())) if self.tbu_box.isChecked() else None
+        kwargs = dict(source=self.rom_path, output=output, tools=discover_tools(),
+            apply_tbu=self.tbu_box.isChecked(), driver=Path(self.driver_combo.currentData()) if self.tbu_box.isChecked() else None,
+            apply_secureboot=self.sb_box.isChecked(), donor_source=self._asset('secureboot_donors'),
+            apply_optimized=self.optimized_box.isChecked(), apply_overclock=self.overclock_box.isChecked(),
+            apply_splash=self.splash_box.isChecked(), splash_image=None if self.auto_splash_box.isChecked() else self._custom_logo, repair_fit=True)
+        self.progress_tracker = BuildProgressTracker(kwargs); worker = BuildWorker(kwargs)
+        worker.progress.connect(self._on_build_progress); self._launch('build', worker, self._build_finished)
 
-    def _update_default_output(self) -> None:
-        if not self.rom_path:
-            return
-        if not self.output_manual:
-            self.output_edit.setText(
-                str(
-                    default_output(
-                        self.rom_path,
-                        apply_tbu=self.tbu_box.isChecked(),
-                        apply_secureboot=self.sb_box.isChecked(),
-                        apply_splash=self.splash_box.isChecked(),
-                        repair_fit=True,
-                        apply_optimized=self.optimized_box.isChecked(),
-                        apply_overclock=self.overclock_box.isChecked(),
-                    )
-                )
-            )
+    def _on_build_progress(self, name, status, details):
+        self.build_log.appendPlainText(f'[{status}] {name}: {details}')
+        lowered = name.lower()
+        key = ('tbu' if any(word in lowered for word in ('06f2', 'c-state', 's3turbo', 'tbu')) else
+            'secureboot' if any(word in lowered for word in ('secure boot', 'pkvar', 'kekvar', 'dbvar')) else
+            'optimized' if 'optimized' in lowered else 'overclock' if 'multiplier' in lowered else
+            'splash' if 'splash' in lowered else 'fit' if 'fit' in lowered else
+            'final' if 'final' in lowered or 'report' in lowered else 'preflight')
+        self._build_phase_key = 'build.phase.' + key
+        self.build_phase_label.setText(self.t(self._build_phase_key))
+        if self.progress_tracker: self.build_progress.setValue(self.progress_tracker.update(name, status, details))
 
-    # ---------- paths/assets ----------
-    def driver_paths(self) -> list[Path]:
-        base = app_directory()
-        source = Path(__file__).resolve().parent.parent
-        found: dict[str, Path] = {}
-        for folder in (base, base / "drivers", source, source / "drivers"):
-            if folder.is_dir():
-                for path in folder.glob("*.ffs"):
-                    try:
-                        inspect_driver(path)
-                        found[str(path.resolve()).lower()] = path.resolve()
-                    except Exception:
-                        pass
-        return sorted(found.values(), key=lambda p: p.name.lower())
-
-    def refresh_drivers(self) -> None:
-        self.driver_combo.clear()
-        for path in self.driver_paths():
-            info = inspect_driver(path)
-            uv = info.undervolt_mv
-            label = f"Core {uv['Core']} mV / Cache {uv['Cache']} mV / System Agent {uv['System Agent']} mV"
-            self.driver_combo.addItem(label, str(path))
-        # The project's commonly used validated profile is -60/-50/-50 when present.
-        for i in range(self.driver_combo.count()):
-            if "Core -60 mV / Cache -50 mV / System Agent -50 mV" in self.driver_combo.itemText(i):
-                self.driver_combo.setCurrentIndex(i)
-                break
-
-    def _use_bundled_donor(self) -> None:
-        candidates = [app_directory() / "secureboot_donors", Path(__file__).resolve().parent.parent / "secureboot_donors"]
-        for path in candidates:
-            if path.is_dir():
-                self.donor_edit.setText(str(path))
-                self._plan_changed()
-                return
-
-    def _use_bundled_splash(self) -> None:
-        candidates = [app_directory() / "assets" / "SenorSpace.bmp", Path(__file__).resolve().parent.parent / "assets" / "SenorSpace.bmp"]
-        for path in candidates:
-            if path.is_file():
-                self.splash_edit.setText(str(path))
-                return
-
-    def _splash_mode_changed(self, automatic: bool) -> None:
-        self.splash_edit.setReadOnly(automatic)
-        if automatic:
-            self._use_bundled_splash()
-        self._plan_changed()
-
-    def _browse_output(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Save modified ROM", self.output_edit.text(), "Firmware images (*.rom *.ROM *.bin *.BIN)")
-        if path:
-            self.output_manual = True
-            self.output_edit.setText(path)
-
-    def _browse_donor(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "Choose Secure Boot donor folder", self.donor_edit.text())
-        if path:
-            self.donor_edit.setText(path)
-            self._plan_changed()
-
-    def _browse_splash(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Choose boot logo", self.splash_edit.text(), "Bitmap images (*.bmp *.BMP)")
-        if path:
-            self.auto_splash_box.setChecked(False)
-            self.splash_edit.setText(path)
-            self.splash_box.setChecked(True)
-            self._plan_changed()
-
-    def _update_logo_preview(self) -> None:
-        path = Path(self.splash_edit.text())
-        if path.is_file():
-            pix = QPixmap(str(path))
-            if not pix.isNull():
-                self.logo_preview.setPixmap(pix.scaled(self.logo_preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self._plan_changed()
-                return
-        self.logo_preview.setPixmap(QPixmap())
-        self.logo_preview.setText("No preview")
-        self._plan_changed()
-
-    # ---------- build ----------
-    def start_build(self) -> None:
-        if self._operation_busy() or not self._require_all_tools():
-            return
-        if not self.report or not self.rom_path:
-            return
-        if self.tbu_box.isChecked() and not self._tbu_acknowledged and not self._confirm_tbu_selection():
-            return
-        output = Path(self.output_edit.text()).resolve()
-        if output == self.rom_path:
-            QMessageBox.warning(self, "Choose a different output file", "The toolkit never overwrites the input ROM. Choose a different output filename.")
-            return
-        driver = Path(self.driver_combo.currentData()) if self.driver_combo.currentData() else None
-        donor = Path(self.donor_edit.text()).resolve() if self.donor_edit.text().strip() else None
-        splash = None if self.auto_splash_box.isChecked() else (Path(self.splash_edit.text()).resolve() if self.splash_edit.text().strip() else None)
-        if self.tbu_box.isChecked() and not driver:
-            QMessageBox.warning(self, "Turbo Boost Unlock profile missing", "Choose a validated undervolt profile.")
-            return
-        if self.sb_box.isChecked() and (not donor or not donor.exists()):
-            QMessageBox.warning(self, "Secure Boot donor missing", "Use the bundled validated donor set or choose a valid donor folder.")
-            return
-        if self.splash_box.isChecked() and not self.auto_splash_box.isChecked() and (not splash or not splash.is_file()):
-            QMessageBox.warning(self, "Boot logo missing", "Choose a BMP image for the boot logo.")
-            return
-        kwargs = dict(
-            source=self.rom_path,
-            output=output,
-            tools=discover_tools(),
-            apply_tbu=self.tbu_box.isChecked(),
-            driver=driver,
-            apply_secureboot=self.sb_box.isChecked(),
-            donor_source=donor,
-            secureboot_mode="auto",
-            apply_optimized=self.optimized_box.isChecked(),
-            apply_overclock=self.overclock_box.isChecked(),
-            apply_splash=self.splash_box.isChecked(),
-            splash_image=splash,
-            repair_fit=True,
-            preserve_stages=self.preserve.isChecked(),
-        )
-        self._secureboot_flash_context = (
-            kwargs['apply_secureboot'] and not any(kwargs[k] for k in
-            ('apply_tbu', 'apply_optimized', 'apply_overclock', 'apply_splash'))
-            and sha256_file(self.rom_path) in self.own_dump_hashes
-        )
-        self.technical_log_lines.clear()
-        self.build_log.clear()
-        self.build_steps.setRowCount(0)
-        self.progress_tracker = BuildProgressTracker(kwargs)
-        self.build_progress.setValue(0)
-        self.build_state_banner.setText("Creating firmware… The original ROM is untouched.")
-        self.build_state_banner.setStyleSheet("background:#e9f2fb;border:1px solid #c8def2;border-radius:8px;padding:10px 12px;color:#174f7c;")
-        self.build_btn.setEnabled(False)
-        self.open_output_btn.setEnabled(False)
-        self.open_report_btn.setEnabled(False)
-        self.open_diagnostics_btn.setEnabled(False)
-        self._set_nav(self.PAGE_BUILDS)
-
-        self.build_thread = QThread()
-        self.build_worker = BuildWorker(kwargs)
-        self.build_worker.moveToThread(self.build_thread)
-        self.build_thread.started.connect(self.build_worker.run)
-        self.build_worker.progress.connect(self._on_build_progress)
-        self.build_worker.finished.connect(self._build_finished)
-        self.build_worker.finished.connect(self.build_thread.quit)
-        self.build_thread.finished.connect(self.build_thread.deleteLater)
-        self.build_thread.finished.connect(self._clear_build_thread)
-        self.build_worker.finished.connect(self.build_worker.deleteLater)
-        self._sync_busy_controls()
-        self.build_thread.start()
-
-    def _clear_build_thread(self) -> None:
-        self.build_thread = None
-        self.build_worker = None
-        self._sync_busy_controls()
-        if self.pending_flash:
-            target = self.pending_flash
-            self.pending_flash = None
-            QTimer.singleShot(0, lambda: self._offer_flash(target))
-
-    def _offer_flash(self, target):
-        if QMessageBox.question(self, "ROM created", "Flash this ROM now?\n\n" + str(target), QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
-            self.start_flash(target_path=target, secureboot_context=self._secureboot_flash_context)
-
-    def _friendly_step(self, name: str, status: str, details: str) -> tuple[str, str]:
-        mapping = {
-            "Input preflight": ("Validate source firmware", "The input file size and SHA-256 were recorded."),
-            "Initial inspection": ("Inspect current firmware", "The current feature state and firmware structure were identified."),
-            "Remove 06F2 microcode": ("Prepare Turbo Boost Unlock", "The required 06F2 microcode state was verified."),
-            "Capture FIT microcode identities": ("Record firmware integrity references", "Microcode identities were captured so FIT can be repaired by identity after rebuilds."),
-            "Set primary IntelSetup C-states": ("Apply Turbo Boost Unlock defaults", "The primary CPU power-state defaults were updated and verified."),
-            "Set NV-Internal C-state defaults": ("Apply Turbo Boost Unlock defaults", "The internal mirrored CPU defaults were updated and verified."),
-            "Set AMITSESetupData C-state default": ("Apply Turbo Boost Unlock defaults", "The AMI default/template copy was updated and verified."),
-            "Validate complete MiyConst C-states": ("Verify Turbo Boost Unlock defaults", "All required C-state default copies agree."),
-            "Apply TBU payload": ("Install Turbo Boost Unlock payload", "The selected undervolt payload was inserted and independently verified."),
-            "Apply Optimized BIOS Settings": ("Apply performance-oriented defaults", "The validated BIOS default profile is being applied and checked."),
-            "Validate Optimized BIOS Settings": ("Verify performance-oriented defaults", "All validated settings and mirrored copies must match."),
-            "Apply multiplier OC: primary IntelSetup": ("Apply unlocked-multiplier defaults", "The primary overclocking and current-limit defaults are being updated and verified."),
-            "Apply multiplier OC: NV-Internal": ("Mirror unlocked-multiplier defaults", "The internal setup-default copy is being updated and verified."),
-            "Apply multiplier OC: AMITSESetupData": ("Expose and configure OC controls", "The verified AMIBCP menu-access flags and default-table values are being reproduced."),
-            "Validate multiplier OC compatibility": ("Verify unlocked-multiplier compatibility", "All three setup values, their mirror and the eight AMIBCP bytes must match."),
-            "Replace PkVar": ("Update Secure Boot factory keys", "The Platform Key default is being updated only if required."),
-            "Replace KekVar": ("Update Secure Boot factory keys", "The KEK factory default is being updated only if required."),
-            "Replace dbVar": ("Update Secure Boot factory keys", "The allowed-signature factory database is being updated only if required."),
-            "Apply Secure Boot 2023": ("Verify Secure Boot factory keys", "The completed 2023-capable factory key set is being checked."),
-            "Replace splash logo": ("Replace and verify boot logo", "The selected image is being embedded, re-extracted and pixel-verified."),
-            "Repair / validate FIT": ("Check firmware integrity", "FIT microcode pointers are being repaired if needed and then validated."),
-            "Final validation": ("Verify completed ROM", "The final image must preserve the source size and pass the combined inspection."),
-            "Reports": ("Write build reports", "Detailed text, JSON and live-log reports are written beside the ROM."),
-            "Build": ("Build firmware", "The build stopped safely before reporting success." if status == "FAIL" else details),
-        }
-        return mapping.get(name, (name, details))
-
-    def _on_build_progress(self, name: str, status: str, details: str) -> None:
-        self.technical_log_lines.append(f"[{status}] {name}: {details}")
-        self.build_log.appendPlainText(self.technical_log_lines[-1])
-        friendly_name, explanation = self._friendly_step(name, status, details)
-        row = None
-        for i in range(self.build_steps.rowCount()):
-            if self.build_steps.item(i, 0) and self.build_steps.item(i, 0).text() == friendly_name:
-                row = i
-                break
-        if row is None:
-            row = self.build_steps.rowCount()
-            self.build_steps.insertRow(row)
-            self.build_steps.setItem(row, 0, QTableWidgetItem(friendly_name))
-        visible_status = {"PASS": "✓ Complete", "RUNNING": "In progress…", "SKIP": "✓ Already current", "FAIL": "✕ Failed"}.get(status, status)
-        self.build_steps.setItem(row, 1, QTableWidgetItem(visible_status))
-        self.build_steps.setItem(row, 2, QTableWidgetItem(explanation))
-        if self.progress_tracker:
-            self.build_progress.setValue(self.progress_tracker.update(name, status, details))
-
-    def _build_finished(self, report, error: str) -> None:
+    def _build_finished(self, report, error):
         self.last_build_report = report
-        self.build_btn.setEnabled(True)
-        self.open_output_btn.setEnabled(bool(report))
-        self.open_report_btn.setEnabled(bool(report and report_paths(Path(report.output_path))[1].is_file()))
-        self.open_diagnostics_btn.setEnabled(bool(report and report.tool_output.get("Diagnostic evidence")))
-        if report and report.success:
-            self._secureboot_flash_context = bool(self._secureboot_flash_context and report.input_sha256 in self.own_dump_hashes)
-            self.last_built_rom = Path(report.output_path)
-            self.pending_flash = self.last_built_rom
-            self.build_state_banner.setText(
-                f"✓ ROM created and verified\n{Path(report.output_path).name}\nAll requested modifications and final integrity checks passed."
-            )
-            self.build_state_banner.setStyleSheet("background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:10px 12px;color:#1d6b39;font-weight:600;")
-            self.open_output_btn.setEnabled(True)
-            self.open_report_btn.setEnabled(True)
-        else:
-            message = report.error if report else self._friendly_exception(error)
-            self.build_state_banner.setText(
-                "✕ The ROM was not accepted as a successful build\n"
-                + message
-                + "\nNo firmware was flashed. Review the technical log for the exact failure."
-            )
-            self.build_state_banner.setStyleSheet("background:#fdeeee;border:1px solid #ebc6c6;border-radius:8px;padding:10px 12px;color:#8f2727;font-weight:600;")
+        if report and report.success and self._plan() == self._build_plan:
+            path = Path(report.output_path)
+            try:
+                valid = path.is_file() and path.stat().st_size == self.report.rom_size and sha256_file(path) == report.output_sha256
+            except OSError: valid = False
+            if valid:
+                self.last_built_rom = path; self._build_digest = report.output_sha256; self._last_build_status = 'build.success'
+                self.build_progress.setValue(100)
+            else: self._last_build_status = 'build.failed'
+        else: self._last_build_status = 'build.failed'
+        if self._last_build_status == 'build.failed': self.build_log.appendPlainText(report.error if report else error)
+        self._refresh_state()
 
-    # ---------- misc UI ----------
-    def _toggle_advanced(self) -> None:
-        visible = not self.advanced_panel.isVisible()
-        self.advanced_panel.setVisible(visible)
-        self.advanced_toggle.setText("Advanced options ▴" if visible else "Advanced options ▾")
+    def _verified_build(self):
+        try:
+            valid = bool(self.completed_steps()[4] and self.last_built_rom.is_file() and sha256_file(self.last_built_rom) == self._build_digest
+                and self._plan() == self._build_plan and sha256_file(self.rom_path) == self.report.rom_sha256)
+            if self.splash_box.isChecked(): valid = valid and self._logo_verified()
+            if self.tbu_box.isChecked():
+                valid = valid and sha256_file(Path(self.driver_combo.currentData())) == self._driver_hash_at_build
+            return valid
+        except (OSError, TypeError, AttributeError): return False
 
-    def _toggle_log(self) -> None:
-        visible = not self.build_log.isVisible()
-        self.build_log.setVisible(visible)
-        self.log_toggle.setText("Hide technical log ▴" if visible else "Show technical log ▾")
+    def save_rom(self):
+        if self._operation_busy() or not self.completed_steps()[4]: return
+        if not self._verified_build(): self._message('error.changed'); self._invalidate_build(); self._refresh_state(); return
+        path = self._file_dialog('save.choose', 'rom.filter', save=True, start=str(self.last_built_rom))
+        if not path: return
+        destination = Path(path).resolve()
+        if destination == self.rom_path.resolve() or (destination.exists() and destination.samefile(self.rom_path)):
+            self._message('error.source_output'); return
+        temporary = None
+        try:
+            if destination != self.last_built_rom.resolve() and not (destination.exists() and destination.samefile(self.last_built_rom)):
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False, suffix='.tmp') as handle:
+                    temporary = Path(handle.name)
+                    with self.last_built_rom.open('rb') as source: shutil.copyfileobj(source, handle)
+                    handle.flush(); os.fsync(handle.fileno())
+                if sha256_file(temporary) != self._build_digest: raise ValueError('Saved copy hash mismatch')
+                os.replace(temporary, destination)
+            if sha256_file(destination) != self._build_digest: raise ValueError('Saved file changed')
+            self.saved_path = destination; self._delivery_complete = True
+        except Exception as exc:
+            self.flash_view.console.appendPlainText(str(exc)); self._message('save.failed')
+        finally:
+            if temporary: temporary.unlink(missing_ok=True)
+        self._refresh_state()
 
-    def _open_output_folder(self) -> None:
-        if not self.last_build_report or not self.last_build_report.output_path:
-            return
-        path = Path(self.last_build_report.output_path).resolve().parent
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+    # ---- inline hardware operations ----
+    def _start_fpt_probe(self):
+        if self._operation_busy() or self.probe_thread is not None or not self._require_all_tools(notify=False): return
+        self.fpt_probe = None; self._launch('probe', fpt_gui.FptProbeWorker(), self._fpt_probe_finished)
 
-    def _open_diagnostics(self) -> None:
+    def _fpt_probe_finished(self, result):
+        self.fpt_probe = result
+        probe = result.get('probe') or {}
+        for line in probe.get('transcript', []): self.dump_view.console.appendPlainText(line)
+        self._refresh_state()
+
+    def _update_fpt_status_labels(self):
+        result = self.fpt_probe
+        if self.probe_thread is not None: key = 'fpt.checking'
+        elif result is None: key = 'fpt.unknown'
+        elif result.get('ready'): key = 'fpt.ready'
+        elif result.get('reason') == 'memory-integrity-block': key = 'fpt.memory_integrity'
+        elif result.get('reason') == 'driver-certificate-revoked': key = 'fpt.revoked'
+        else: key = 'fpt.blocked'
+        for label in self.fpt_status_labels:
+            label.setText(self.t(key)); label.setStyleSheet('color:#218044;' if key == 'fpt.ready' else 'color:#a52222;' if key in ('fpt.memory_integrity', 'fpt.revoked', 'fpt.blocked') else 'color:#5a6b7d;')
+
+    def _ensure_fpt_ready(self):
+        return bool(not self._operation_busy() and self.probe_thread is None and self._require_all_tools()
+            and self.fpt_probe and self.fpt_probe.get('ready'))
+
+    def start_dump(self):
+        if not self._ensure_fpt_ready(): return
+        root = backup_directory().parent; root.mkdir(parents=True, exist_ok=True)
+        path = self._file_dialog('rom.dump_save', 'rom.filter', save=True, start=str(root / ('BIOS-Dump-' + datetime.now().strftime('%Y%m%d-%H%M%S') + '.ROM')))
+        if not path: return
+        self._bios_mode = 'dump'; self._fpt_result = None; self._bios_running = True; self.dump_view.reset('dump')
+        worker = fpt_gui.FptWorker('dump', Path(path)); worker.event.connect(self.dump_view.event_received)
+        self._launch('bios', worker, self._bios_finished)
+
+    def start_flash(self):
+        if not self.completed_steps()[4] or not self._ensure_fpt_ready(): return
+        if not self._verified_build(): self._message('error.changed'); self._invalidate_build(); self._refresh_state(); return
+        if not self._message('fpt.confirm', title='fpt.confirm_title', confirm=True, path=self.last_built_rom): return
+        # Check again after a potentially long confirmation dialog.
+        if not self._verified_build() or not self._require_all_tools(): self._message('error.changed'); return
+        self._bios_mode = 'flash'; self._fpt_result = None; self._bios_running = True; self.flash_view.reset('flash')
+        worker = fpt_gui.FptWorker('flash', self.last_built_rom); worker.event.connect(self.flash_view.event_received)
+        self._launch('bios', worker, self._bios_finished)
+
+    def _bios_finished(self, result):
+        self._fpt_result = result; view = self.dump_view if self._bios_mode == 'dump' else self.flash_view
+        if self._bios_mode == 'dump': key, values = ('rom.dump_complete' if result.success else 'rom.dump_failed'), {}
+        elif result.success: key, values = 'fpt.flash_complete', dict(path=result.backup_path)
+        elif result.recovery_attempted and result.recovery_success: key, values = 'fpt.recovered', dict(path=result.backup_path)
+        elif result.recovery_attempted and result.recovery_success is False: key, values = 'fpt.recovery_failed', dict(path=result.backup_path)
+        else: key, values = 'fpt.flash_failed', dict(path=result.backup_path or self.t('common.none'))
+        view.status.setText(self.t(key, **values)); view.status.setStyleSheet('color:#1b7b40;' if result.success else 'color:#a51e24;font-weight:650;')
+        view._result_translation = key, values
+        if getattr(result, 'error', None): view.console.appendPlainText(str(result.error))
+
+    # ---- dialogs and output ----
+    def _file_dialog(self, title, filter_key, *, save=False, start=''):
+        dialog = QFileDialog(self, self.t(title), start)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setNameFilter(self.t(filter_key)); dialog.setAcceptMode(QFileDialog.AcceptSave if save else QFileDialog.AcceptOpen)
+        dialog.setFileMode(QFileDialog.AnyFile if save else QFileDialog.ExistingFile)
+        if save: dialog.setDefaultSuffix('ROM')
+        dialog.setLabelText(QFileDialog.Accept, self.t('common.save' if save else 'common.open'))
+        dialog.setLabelText(QFileDialog.Reject, self.t('common.cancel'))
+        return dialog.selectedFiles()[0] if dialog.exec() and dialog.selectedFiles() else None
+
+    def _message(self, key, *, title='error.title', confirm=False, **values):
+        box = QMessageBox(self); box.setWindowTitle(self.t(title)); box.setText(self.t(key, **values))
+        box.setTextFormat(Qt.PlainText); box.setIcon(QMessageBox.Warning if confirm else QMessageBox.Information)
+        if confirm:
+            box.setStandardButtons(QMessageBox.Yes | QMessageBox.No); box.setDefaultButton(QMessageBox.No)
+            box.button(QMessageBox.Yes).setText(self.t('common.yes')); box.button(QMessageBox.No).setText(self.t('common.no'))
+            return box.exec() == QMessageBox.Yes
+        box.setStandardButtons(QMessageBox.Ok); box.button(QMessageBox.Ok).setText(self.t('common.ok')); box.exec(); return False
+
+    def _open_report(self):
         if self.last_build_report:
-            directory = self.last_build_report.tool_output.get("Diagnostic evidence")
-            if directory and Path(directory).is_dir():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
+            path = report_paths(Path(self.last_build_report.output_path))[1]
+            if path.is_file(): QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
-    def _open_report(self) -> None:
-        if not self.last_build_report or not self.last_build_report.output_path:
-            return
-        path = report_paths(Path(self.last_build_report.output_path))[1]
-        if path.is_file():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+    def _open_output_folder(self):
+        if self.last_built_rom: QDesktopServices.openUrl(QUrl.fromLocalFile(str((self.saved_path or self.last_built_rom).parent)))
 
-    def _friendly_exception(self, raw: str) -> str:
-        if "Expected one validated" in raw or "unsupported" in raw.lower() or "not recognized" in raw.lower():
-            return "The toolkit does not recognize the firmware structure required for this operation. No changes were made. Technical details are available in the traceback/log."
-        if "FileNotFoundError" in raw:
-            return "A required file or external firmware tool is missing. The operation was stopped before a successful ROM could be produced."
-        lines = [line.strip() for line in raw.splitlines() if line.strip()]
-        return lines[-1] if lines else "An unexpected error occurred while analyzing the firmware."
+    def _resume_pending_open(self):
+        if self._pending_open_path and self._rom_input_allowed():
+            path, self._pending_open_path = self._pending_open_path, None; self.load_rom(path)
 
 
-def run_gui() -> int:
-    start_session_log(__version__, APP_TITLE)
-    install_exception_hook()
+def run_gui():
+    start_session_log(__version__, APP_TITLE); install_exception_hook()
     app = QApplication.instance() or QApplication(sys.argv)
     from .runtime_bootstrap import audit_loaded
-    audit_loaded()
-    app.setApplicationName(APP_TITLE)
-    app.aboutToQuit.connect(lambda: finish_session_log("GUI exit"))
-    window = Window()
-    window.show()
+    audit_loaded(); app.setApplicationName(APP_TITLE)
+    app.aboutToQuit.connect(lambda: finish_session_log('GUI exit'))
+    window = Window(); window.show()
     if len(sys.argv) == 2:
-        window._pending_open_path = sys.argv[1]
-        QTimer.singleShot(0, window._resume_pending_open)
+        window._pending_open_path = sys.argv[1]; QTimer.singleShot(0, window._resume_pending_open)
     return app.exec()

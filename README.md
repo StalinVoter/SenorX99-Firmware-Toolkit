@@ -1,62 +1,46 @@
 Thank you to [MiyConst](https://www.youtube.com/c/Miyconst) for his tireless work promoting the X99 platform and helping the community get more from these motherboards. None of this would have been possible without him.
 
-# SenorX99 v0.86
+# SenorX99 v0.91
 
 **Firmware Toolkit for Chinesium 2011-3 Xeon Boards**
 
-SenorX99 is a Windows app for supported Chinesium X99 Xeon motherboards. It helps you back up and modify your BIOS, apply Turbo Boost Unlock, update Secure Boot certificates, change BIOS settings and replace the startup logo.
+SenorX99 helps you back up and modify the BIOS on supported Chinesium X99 motherboards. It guides you through checking tools, loading a BIOS, choosing modifications and building a new ROM to save or flash.
 
 ## Features
 
-- Secure Boot factory-default PK/KEK/db inspection and validated 2023-capable updates, preserving dbx. ROM defaults are distinct from the keys currently enrolled on the running motherboard.
-- Turbo Boost Unlock for supported Xeon E5-26xx v3 CPUs, validated undervolt payloads, microcode handling and mirrored C-state defaults. Selecting TBU opens a CPU-compatibility reminder: applying it with an E5 v4 CPU may prevent POST. Continuing requires an explicit Yes; No is selected by default.
-- **Overclocking unlock.** Unlock BIOS overclocking controls and apply the associated default settings on supported firmware for CPUs with an unlocked multiplier.
-- **Performance-oriented BIOS defaults.** Apply default BIOS settings aimed at improving performance. The app's **What does this mean?** explanation lists each setting and why it changes.
-- **Boot-logo replacement.** Change the picture displayed when the computer starts, using the included image or your own BMP file.
-- FIT validation/repair, mutation containment and final ROM validation.
-- BIOS dump and a complete flash workflow with two independent, byte-identical backups, permanent backup retention, target-size validation, final verification and automatic recovery where required.
+- **A guided, six-step interface.** Check files, load or dump a BIOS, review its analysis, choose changes, build a new ROM, then save or flash it. Completed steps receive a green checkmark.
+- **CPU detection and recommendations.** Recognises the installed CPU model and suggests appropriate modifications. Custom settings remain available when preparing a BIOS for another computer.
+- **Turbo Boost Unlock.** Prepares supported E5-26xx v3 BIOS images for sustained all-core turbo under load, using the selected ser8989 undervolt profile. The recommended profile is −60/−50/−50 mV for Core / Cache / System Agent.
+- **Overclocking unlock.** Exposes supported BIOS overclocking controls. Recommendations cover E5-1650 v3, 1660 v3, 1680 v3 and i7-5820K, 5930K, 5960X, 6800K, 6850K, 6900K and 6950X.
+- **Secure Boot certificates.** Inspects the ROM's factory certificate defaults and updates outdated defaults to the bundled validated 2023-capable set. Preserves dbx and recognises already-current defaults.
+- **Performance-oriented BIOS defaults.** Includes question-mark help listing the exact settings and reasons for changing them.
+- **Boot-logo replacement.** Uses the included image or a custom BMP. A custom image must pass a replacement and verification trial before it becomes selectable.
+- **Inline dump/flash progress.** Progress bars and FPT console output appear inside the relevant page. Flashing retains the existing two-backup comparison, verification and automatic recovery workflow.
+- **External language files.** All main-interface text comes from `languages/en.json`. Only English is included. A later translation can supply another UTF-8 JSON file using the same identifiers and placeholders.
 
-Support is determined separately for each feature from the actual firmware structures. The existing XD3/XD4, MACHINIST V9S, Qiyida K9S and Jginue-family mappings are retained; a board name alone does not establish support for every operation. See `BOARD-EVIDENCE.json` and `V9S-SUPPORT-MAPPING.txt` for the existing mapping evidence.
+Each modification still requires the corresponding supported ROM structures. CPU detection guides recommendations and does not block manual choices for a different target CPU.
 
 ## How to use the app
 
-1. **Download the Windows release.** Get **SenorX99-v0.86-Windows-x64.zip** from the [Releases page](https://github.com/StalinVoter/SenorX99-Firmware-Toolkit/releases/latest).
-2. **Extract the whole ZIP**, then open **SenorX99.exe** from the extracted folder. Keep all the extracted files together. Start the app normally; Windows will ask for administrator permission when you use the BIOS dump or flash functions.
-3. **Download the missing tools.** On **Overview**, click **Download** beside each missing tool. The app downloads and checks the files for you. Intel FPT's files are installed together with one button. You do not need Python or WinGet. All required tools must be installed before you can load or dump a BIOS file. The missing-tools section disappears when everything is ready. You can check the tools again under **Required tools → Recheck files**.
-4. **Open or save a copy of your BIOS.** Use **Load / Dump ROM** to open an existing `.ROM` or `.BIN` BIOS file, or choose **Dump BIOS** to save a copy of the BIOS installed on this computer. You can also drag an existing BIOS file onto Overview. **Load / Dump ROM** stays available when you want to open another file.
-5. **Choose your changes.** Review the results on **Overview**, then select the changes you want under **Create ROM**. Use **What does this mean?** for explanations.
-6. **Create the modified BIOS file.** Choose where to save it and start the build. **Builds** shows progress and the result. The app creates a new file and leaves your original BIOS file unchanged.
-7. **Install the modified BIOS when you are ready.** Use **Flash BIOS** or accept the offer shown after a successful build. Before writing anything, the app saves two copies of your current BIOS and checks that they match. It then checks the written BIOS and can attempt to restore the backup if writing fails.
+Extract the entire Windows ZIP into a folder, then open **SenorX99.exe**. Keep the executable, language files and other extracted folders together. No separately installed Python or WinGet is required.
 
-Wait for an active operation to finish before opening another BIOS file. **Technical details** contains the inspection results and diagnostic information if something needs investigating.
+1. **Verify that all necessary files are installed.** Download each missing tool. Intel FPT's executable and two DLLs are installed together with one button. Continue when all required files are ready.
+2. **Load / Dump ROM.** Browse for an existing `.ROM` or `.BIN` file, drag it onto the drop area, or dump this computer's BIOS. Dumping needs administrator permission. Windows security or another FPT blocker may prevent dumping/flashing while loading, modifying and saving existing ROM files remain available.
+3. **ROM analysis.** Review what is already present and which modifications are available, then continue. The app tests logo replacement on a temporary copy.
+4. **Configure ROM modifications.** Recommended is selected by default and locks the modification choices, undervolt profile and logo controls. Choose Custom settings to edit them or prepare a ROM for another CPU. Click a question mark to read an explanation. Selecting TBU requires acknowledgement of its v3/v4 CPU reminder before proceeding.
+5. **Build new ROM file.** Review the changes, choose the output location if needed, then build and verify. The original BIOS file is never overwritten. Continue after a successful build.
+6. **Flash or save modified ROM.** Save a verified copy for later, or explicitly choose to flash this computer. Saving is enough to complete the workflow. Flashing requires a separate confirmation and creates two independently read, matching backups before writing.
 
-## Building from source on Windows x64
+Wait until dumping, flashing or recovery finishes before closing the app. The final page reports the outcome and retains the FPT output. If automatic recovery fails, follow the displayed instruction not to restart or remove power.
 
-Run **RUN-SETUP-AND-BUILD.cmd**. The setup uses the pinned CPython **3.13.14 x64** interpreter, verifies the official installer when installation is needed, creates a clean `.build-venv`, and installs the hash-locked dependency set. It does not require globally installed Python packages or external firmware utilities.
+## Language files
 
-The build runs source tests and validates mandatory bundled resources, builds both executables, inspects the finished EXE contents and execution manifests, stages all Toolkit assets and runtime notices, and runs the packaged GUI, CLI, conflicting-DLL and harmless elevated-helper tests. The helper test may request UAC; it does not access BIOS hardware. Packaging rejects missing/failed/stale reports or changed executables.
+See [languages/README.md](languages/README.md). Translate text values, leaving identifiers and placeholders such as `{cpu}` unchanged. A language switch refreshes labels without clearing the loaded ROM, selected options or completed steps. Raw FPT output and detailed tool diagnostics retain their original wording.
 
-Successful output:
+## Building from source
 
-```text
-SenorX99-v0.86-Windows-x64.zip
-SenorX99-v0.86-Windows-x64.zip.sha256
-```
+On Windows x64, run **RUN-SETUP-AND-BUILD.cmd**. This creates the pinned Python build environment, runs the source checks, builds the PyInstaller executables and requires the existing packaged runtime/helper validation before public-release packaging.
 
-The source archive contains no Windows executables. Building and running the actual Windows EXEs is a separate validation step; Linux source tests do not establish Windows DLL isolation, Explorer/UAC behavior or physical flash success. Development evidence and remaining checks are recorded in `VALIDATION.md`.
+The command-line firmware engine is retained, including inspection, TBU payload selection, Secure Boot donors, performance defaults, OC compatibility, custom BMPs and automatic startup-information checks.
 
-`TEST-ELEVATED-HELPER.cmd` tests the production administrator handoff without BIOS access. Start it normally. `TEST-WINDOWS-SANDBOX.ps1` optionally runs the packaged tests in an offline Windows Sandbox.
-
-## Command line
-
-```powershell
-SenorX99-CLI.exe --version
-SenorX99-CLI.exe inspect current.ROM --report
-SenorX99-CLI.exe patch current.ROM --secureboot-donor secureboot_donors -o updated.ROM
-SenorX99-CLI.exe patch current.ROM --optimized-settings --unlocked-multiplier-oc -o modified.ROM
-SenorX99-CLI.exe patch current.ROM --senorspace -o logo.ROM
-```
-
-All prior public patch options are retained, including Secure Boot mode, TBU driver selection, custom splash, FIT options and preserved stages. Source entry points are `SenorX99-GUI.py` and `SenorX99-CLI.py`.
-
-Logs normally go to `LOGS` beside the app. Existing `X99_TOOLKIT_HOME` and `X99_TOOLKIT_BACKUP_DIR` overrides and the prior permanent backup location are preserved. Third-party notices ship under `licenses`.
+See [BUILD-VALIDATION.md](BUILD-VALIDATION.md) for the Windows build and release checks.

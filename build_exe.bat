@@ -6,7 +6,7 @@ if not exist "%BUILD_PY%" (
   echo Run RUN-SETUP-AND-BUILD.cmd to create the pinned build environment.
   exit /b 1
 )
-for %%F in (SenorX99-v0.86-Windows-x64.zip SenorX99-v0.86-Windows-x64.zip.sha256) do if exist "%%F" del /q "%%F"
+for %%F in (SenorX99-v0.91-Windows-x64.zip SenorX99-v0.91-Windows-x64.zip.sha256) do if exist "%%F" del /q "%%F"
 for %%F in (SenorX99.exe SenorX99-CLI.exe) do if exist "dist\%%F" del /q "dist\%%F"
 if exist "build" rmdir /s /q "build"
 mkdir "build"
@@ -30,5 +30,5 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0TEST-PACKA
 if errorlevel 1 exit /b 1
 "%BUILD_PY%" scripts\package_release.py
 if errorlevel 1 exit /b 1
-echo Ready: SenorX99-v0.86-Windows-x64.zip
+echo Ready: SenorX99-v0.91-Windows-x64.zip
 exit /b 0

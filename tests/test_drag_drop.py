@@ -22,7 +22,7 @@ def window(monkeypatch, tmp_path):
             return True
         def load_rom(self, path):
             loaded.append(Path(path).resolve())
-    win = RecordedWindow(runtime_check=True); win.show(); app.processEvents()
+    win = RecordedWindow(runtime_check=True); win.show(); win.page_bodies[win.PAGE_ROM].setEnabled(True); win.drop_zone.setEnabled(True); app.processEvents()
     yield app, win, loaded
     win.close(); app.processEvents()
 

@@ -49,11 +49,13 @@ def package(root: Path = ROOT) -> Path:
     for name in ('SenorX99.exe', 'SenorX99-CLI.exe', 'README.txt'):
         shutil.copy2(root / 'dist' / name, stage / name)
     shutil.copy2(root / 'TEST-ELEVATED-HELPER.cmd', stage / 'TEST-ELEVATED-HELPER.cmd')
+    (stage / 'languages').mkdir(exist_ok=True)
+    shutil.copy2(root / 'languages/README.md', stage / 'languages/README.md')
     for relative in resources['files']:
         target = stage / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / 'dist' / relative, target)
-    for name in ('resource-manifest.json', 'START-HERE.md', 'RELEASE-NOTES-v0.86.md'):
+    for name in ('resource-manifest.json', 'START-HERE.md', 'RELEASE-NOTES-v0.91.md'):
         shutil.copy2(root / 'dist' / name, stage / name)
     (stage / 'tools').mkdir()
     shutil.copy2(root / 'tools' / 'README.txt', stage / 'tools' / 'README.txt')

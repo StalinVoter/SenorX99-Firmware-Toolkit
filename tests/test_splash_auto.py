@@ -101,7 +101,8 @@ class AutoSplashTests(unittest.TestCase):
         self.assertIn('self.auto_splash_box.setChecked(True)', '\n'.join(methods.values()))
         self.assertIn('None if self.auto_splash_box.isChecked()', methods['start_build'])
         self.assertIn('self.auto_splash_box.setChecked(False)', methods['_browse_splash'])
-        self.assertNotIn('self._browse_splash()', methods['_overview_action'])
+        self.assertIn('LogoWorker', methods['_browse_splash'])
+        self.assertIn('_logo_verified', methods['_custom_logo_finished'])
         self.assertIn('--senorspace', (ROOT/'x99toolkit/cli.py').read_text())
 
     def test_already_present_logos_are_verified_without_rewriting(self):

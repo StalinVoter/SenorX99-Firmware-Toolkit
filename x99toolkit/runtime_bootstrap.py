@@ -159,7 +159,8 @@ def prepare_runtime() -> None:
     if sys.platform != 'win32':
         raise RuntimeError('This distribution requires 64-bit Windows.')
     root = Path(sys._MEIPASS).resolve()
-    manifest = json.loads((root / 'runtime-manifest.json').read_text(encoding='utf-8'))
+    manifest_name = ('runtime-manifest-' + sys._senor_kind + '.json') if getattr(sys, '_senor_native_launcher', False) else 'runtime-manifest.json'
+    manifest = json.loads((root / manifest_name).read_text(encoding='utf-8'))
     verify_files(root, manifest)
     log('RUNTIME', json.dumps(manifest['versions'], sort_keys=True))
     loader = WindowsLoader()
@@ -224,6 +225,9 @@ def runtime_self_test(kind: str) -> int:
                     dropped.append(Path(path).resolve())
             window = CheckWindow(runtime_check=True)
             window.setWindowTitle('Runtime self-test')
+            window._set_nav(window.PAGE_ROM)
+            window.page_bodies[window.PAGE_ROM].setEnabled(True)
+            window.drop_zone.setEnabled(True)
             window.show()
             app.processEvents()
             # Exercise the packaged GUI's real drop handlers without firmware

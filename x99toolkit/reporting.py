@@ -24,7 +24,7 @@ def public_data(value):
 def write_inspection(report: InspectionReport, path: Path) -> tuple[Path,Path]:
     path = logs_directory() / path.name
     text_path = Path(str(path) + '.inspection.txt'); json_path = Path(str(path) + '.inspection.json')
-    lines = ['SenorX99 v0.86 inspection','====================================','',f'ROM: {report.rom_path}',f'Size: {report.rom_size}',f'SHA-256: {report.rom_sha256}','','Results:']
+    lines = ['SenorX99 v0.91 inspection','====================================','',f'ROM: {report.rom_path}',f'Size: {report.rom_size}',f'SHA-256: {report.rom_sha256}','','Results:']
     for row in report.rows:
         lines.append(f"- [{row['category']}] {row['check']}: {row['result']} — {row['details']}")
     if report.errors:
@@ -35,7 +35,7 @@ def write_inspection(report: InspectionReport, path: Path) -> tuple[Path,Path]:
 
 def write_build(report: BuildReport, output: Path) -> tuple[Path,Path]:
     _, text_path, json_path = report_paths(output)
-    lines = ['SenorX99 v0.86 build report','======================================','',f'Success: {report.success}',f'Input: {report.input_path}',f'Output: {report.output_path}',f'Live log: {report.build_log_path}',f'Input SHA-256: {report.input_sha256}',f'Output SHA-256: {report.output_sha256}',f'Input size: {report.input_size}',f'Output size: {report.output_size}',f'Options: {report.options}','','Secure Boot plan:']
+    lines = ['SenorX99 v0.91 build report','======================================','',f'Success: {report.success}',f'Input: {report.input_path}',f'Output: {report.output_path}',f'Live log: {report.build_log_path}',f'Input SHA-256: {report.input_sha256}',f'Output SHA-256: {report.output_sha256}',f'Input size: {report.input_size}',f'Output size: {report.output_size}',f'Options: {report.options}','','Secure Boot plan:']
     if report.secure_boot_plan:
         for item in report.secure_boot_plan:
             lines.append(f"- [{item['action']}] {item['name']}: {item['reason']}")

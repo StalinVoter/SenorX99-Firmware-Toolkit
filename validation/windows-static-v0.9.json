@@ -1,0 +1,37 @@
+{
+  "version": "0.9",
+  "packaging": "offline native Windows x64 launcher + private CPython",
+  "embed_sha256": "90b4e5b9898b72d744650524bff92377c367f44bd5fbd09e3148656c080ad907",
+  "wheels": {
+    "pyside6_essentials-6.10.3-cp39-abi3-win_amd64.whl": "051a70e2df79cf1c012a208ad82a98e8de23ca7fe3b0f3344d07152d15705b59",
+    "shiboken6-6.10.3-cp39-abi3-win_amd64.whl": "38261c88e87a1c32d1302b642b755470d2369c78af3c7d7d9e95d631f79b556c",
+    "pillow-12.0.0-cp313-cp313-win_amd64.whl": "4cf7fed4b4580601c4345ceb5d4cbf5a980d030fd5ad07c4d2ec589f95f09905"
+  },
+  "native_import_exports_verified": true,
+  "native_windows_execution_verified": false,
+  "native_files": 58,
+  "launchers": {
+    "SenorX99-CLI.exe": "daae6e7af16f8cc6f3b75f647c95bb99057cbd69a350e06e51e681d882eab3f6",
+    "SenorX99.exe": "4baa10fe68bfe0ba1a9a6069962c49b50d3aecb9b00fbb757ba8ce4f8b47e056"
+  },
+  "executables": {
+    "SenorX99.exe": {
+      "sha256": "4baa10fe68bfe0ba1a9a6069962c49b50d3aecb9b00fbb757ba8ce4f8b47e056",
+      "x64": true,
+      "subsystem": 2,
+      "manifest": "asInvoker"
+    },
+    "SenorX99-CLI.exe": {
+      "sha256": "daae6e7af16f8cc6f3b75f647c95bb99057cbd69a350e06e51e681d882eab3f6",
+      "x64": true,
+      "subsystem": 3,
+      "manifest": "asInvoker"
+    }
+  },
+  "source_tests": {
+    "passed": 260,
+    "skipped": 65,
+    "subtests_passed": 4,
+    "failures": 0
+  }
+}
