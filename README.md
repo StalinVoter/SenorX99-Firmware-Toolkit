@@ -4,19 +4,9 @@ Thank you to [MiyConst](https://www.youtube.com/c/Miyconst) for his tireless wor
 
 **Firmware Toolkit for Chinesium 2011-3 Xeon Boards**
 
-SenorX99 inspects, modifies, dumps and flashes supported AMI X99 firmware. It is the renamed continuation of X99 Firmware Toolkit UX Gen2 v2.6.3, with the standalone SecureBoot patcher's runtime, tools and administrator-helper improvements integrated into the full Toolkit.
+SenorX99 is a Windows app for supported Chinesium X99 Xeon motherboards. It helps you back up and modify your BIOS, apply Turbo Boost Unlock, update Secure Boot certificates, change BIOS settings and replace the startup logo.
 
-## Using the Windows release
-
-Extract the complete Windows ZIP to a writable folder, then start **SenorX99.exe normally**. Keep **SenorX99-CLI.exe** beside it; BIOS access uses this companion to request administrator approval. Inspection, patching and tool installation run in the normal GUI.
-
-Overview displays every missing or incorrect tool with a **Download** button. Intel FPT is one download action that installs its executable and both required DLLs. UEFIReplace, MMTool and ChangeLogo each have their own automatic download action. The missing-tools section disappears when all required files are ready. The **Required tools** tab retains the full inventory and **Recheck files**.
-
-Downloads are checked by exact size and SHA-256 before installation. No WinGet, separate Python installation or manual tool import is required for the Windows release. Public packages exclude the six external binaries. All six required tool files must be present and verified before loading or dumping a ROM, choosing changes, building or flashing. This also applies to command-line inspection and patching.
-
-Once all tools are ready, drop one local `.ROM` or `.BIN` file onto the opening panel or main window, or use **Load / Dump ROM** to open a file or dump the installed BIOS. This sidebar tab stays available after a ROM is loaded, so you can select another source. Overview explains the detected features. Create ROM selects changes, Builds shows progress and results, and Technical details contains inspection evidence. Source selection is locked while an operation is active.
-
-## Firmware features
+## Features
 
 - Secure Boot factory-default PK/KEK/db inspection and validated 2023-capable updates, preserving dbx. ROM defaults are distinct from the keys currently enrolled on the running motherboard.
 - Turbo Boost Unlock for supported Xeon E5-26xx v3 CPUs, validated undervolt payloads, microcode handling and mirrored C-state defaults. Selecting TBU opens a CPU-compatibility reminder: applying it with an E5 v4 CPU may prevent POST. Continuing requires an explicit Yes; No is selected by default.
@@ -27,23 +17,17 @@ Once all tools are ready, drop one local `.ROM` or `.BIN` file onto the opening 
 
 Support is determined separately for each feature from the actual firmware structures. The existing XD3/XD4, MACHINIST V9S, Qiyida K9S and Jginue-family mappings are retained; a board name alone does not establish support for every operation. See `BOARD-EVIDENCE.json` and `V9S-SUPPORT-MAPPING.txt` for the existing mapping evidence.
 
-## What changed in v0.86
+## How to use the app
 
-An already-installed SenorSpace logo now passes the full logo check instead of being wrongly rejected because the ROM did not need changing. Both 4-bit and 8-bit formats, default logos and numbered logo entries are still checked. A replacement that was needed but produced no change still fails.
+1. **Download the Windows release.** Get **SenorX99-v0.86-Windows-x64.zip** from the [Releases page](https://github.com/StalinVoter/SenorX99-Firmware-Toolkit/releases/latest).
+2. **Extract the whole ZIP**, then open **SenorX99.exe** from the extracted folder. Keep all the extracted files together. Start the app normally; Windows will ask for administrator permission when you use the BIOS dump or flash functions.
+3. **Download the missing tools.** On **Overview**, click **Download** beside each missing tool. The app downloads and checks the files for you. Intel FPT's files are installed together with one button. You do not need Python or WinGet. All required tools must be installed before you can load or dump a BIOS file. The missing-tools section disappears when everything is ready. You can check the tools again under **Required tools → Recheck files**.
+4. **Open or save a copy of your BIOS.** Use **Load / Dump ROM** to open an existing `.ROM` or `.BIN` BIOS file, or choose **Dump BIOS** to save a copy of the BIOS installed on this computer. You can also drag an existing BIOS file onto Overview. **Load / Dump ROM** stays available when you want to open another file.
+5. **Choose your changes.** Review the results on **Overview**, then select the changes you want under **Create ROM**. Use **What does this mean?** for explanations. Boot-logo replacement is selected automatically when its compatibility check passes; uncheck it to keep your existing logo.
+6. **Create the modified BIOS file.** Choose where to save it and start the build. **Builds** shows progress and the result. The app creates a new file and leaves your original BIOS file unchanged.
+7. **Install the modified BIOS when you are ready.** Use **Flash BIOS** or accept the offer shown after a successful build. Before writing anything, the app saves two copies of your current BIOS and checks that they match. It then checks the written BIOS and can attempt to restore the backup if writing fails.
 
-Logo-check failures now show their reason directly in Overview. The CPU startup/FIT explanation uses plain language. Successful BIOS dumps clearly say when the window can be closed, and the redundant download footer has been removed. Source builds use a project-local test directory to avoid a locked shared pytest folder. Source ZIPs are completed before publication and use standard, uncompressed ZIP entries.
-
-See `RELEASE-NOTES-v0.86.md` for this release. The runtime and helper improvements from v0.85 are retained.
-
-## What changed in v0.85
-
-The GUI stays at normal privileges for Explorer drag-and-drop. Only BIOS access requests elevation, and the entire flash/backup/recovery operation runs inside one helper. Caller-created result/event files are updated in place, carrying the standalone v0.967 reply-access fix. Helper launch, cancellation, reply-access, operation and cleanup errors retain distinct diagnostics. Revoked FPT driver certificate error `0x800B010C` receives its own diagnosis.
-
-The app checks and repairs exact external tools, isolates their launch environment from its private Qt runtime, logs before importing Qt, and falls back to another writable log directory when necessary. Packaged launches verify native-file hashes, native module paths and Qt/PySide/Shiboken versions.
-
-After a successful build, the original **ROM created** question is followed by a second flash acknowledgement, both defaulting to No. The approved Secure Boot-specific wording is used only for a Secure Boot-only build from an unchanged BIOS dump made by this running app; arbitrary or combined modifications receive the general target/backup/recovery warning.
-
-A separate follow-up corrects the misleading “2011 only” db label when some 2023 certificates are present. It reports a partial 2023 set without changing the full-set update policy.
+Wait for an active operation to finish before opening another BIOS file. **Technical details** contains the inspection results and diagnostic information if something needs investigating.
 
 ## Building from source on Windows x64
 
