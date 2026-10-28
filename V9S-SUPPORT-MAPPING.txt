@@ -1,0 +1,5 @@
+Gen2-v2.6.3 retains the previously validated V9S/K9S mappings.
+
+- C-state and Performance-oriented default mappings remain unchanged.
+- The new unlocked-multiplier compatibility option is intentionally unavailable on V9S/K9S because no controlled stock/OC reference pair was supplied for that firmware family.
+- Firmware-family selection remains fail-closed through exact main-AMITSE fingerprints and validated setup layouts.

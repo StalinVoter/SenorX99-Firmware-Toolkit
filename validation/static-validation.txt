@@ -1,0 +1,1 @@
+SenorX99 v0.86: 271 source tests and four logo subtests passed; 52 skipped. Qt offscreen screens inspected. Source CLI version and bundled inputs verified. Source ZIP checked before and after saving. No Windows executable execution or hardware BIOS operations performed here. See VALIDATION.md.

@@ -1,0 +1,7 @@
+{
+  "filename": "pillow-12.0.0-cp313-cp313-win_amd64.whl",
+  "version": "12.0.0",
+  "sha256": "4cf7fed4b4580601c4345ceb5d4cbf5a980d030fd5ad07c4d2ec589f95f09905",
+  "source": "PyPI Pillow 12.0.0 official release wheel",
+  "verification": "Downloaded the Windows CPython 3.13 x64 wheel, hashed locally; native modules inspected separately."
+}

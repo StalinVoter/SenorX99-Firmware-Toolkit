@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "files": {
+    "BOARD-EVIDENCE.json": "026e86486739a337adc8b62fadc554c383e0dfcef7b990fdd9ccd61491f30dd1",
+    "V9S-SUPPORT-MAPPING.txt": "6a55c121a56b32d28cb52ef6d82ec50205788b5eaaf4b1e955d0a821f12e85fa",
+    "assets/SenorSpace-XD3-4bit.bmp": "b23d89912614f63a6ffd4256e611728e1d5cc674c174297ae2811e6ebbdc9130",
+    "assets/SenorSpace.bmp": "fba54288eb48b68a119603063df41b90423b1c49c1544acc3c23daeac65727f7",
+    "drivers/ser8989_S3TurboHack-40-20-20.ffs": "753cd44f6633d0b9b1e2852d9470db8ca05b37473372d0ee1ac69566ce4ce6f5",
+    "drivers/ser8989_S3TurboHack-50-0-0.ffs": "7f815bcb873965766912aac6316381b4e08820cc31a6869f378edbb65a1dba1b",
+    "drivers/ser8989_S3TurboHack-50-40-10.ffs": "333bc314f01ce2cf5a85189e9222356385532df8ac59ede3bfd7bbb0ea3d5a0d",
+    "drivers/ser8989_S3TurboHack-50-50-30.ffs": "e9d43635a6f5d5deedc848b6b2cb512ab478c0fedb4725ed3d0bf0f116c3eea6",
+    "drivers/ser8989_S3TurboHack-60-50-50.ffs": "0f3a2934c0531a0ec3838e5cb6be9950e32c7bc6aeb9e95e22bd3fadc8245de0",
+    "drivers/ser8989_S3TurboHack-70-50-50.ffs": "225175775b71d33fc557e3d15084f7c12df4a20fc63edf99496b4c0de1fc6bb4",
+    "fpt_support/fparts.txt": "9f815e22fdc5562f0af6ac552c27e0adccf9f3654c3d76dbc4f9cc9278bc2313",
+    "secureboot_donors/KekVar.ffs": "6b8bcfd771d6efcba8459d62d2a8687a252671d66ea0f22ee6aa2140ac8e802a",
+    "secureboot_donors/PkVar.ffs": "6ad2c119c70b4325ad29138c65d0ddafd09cdba299d34fdcb4e3f2aa01b1e7dd",
+    "secureboot_donors/dbVar.ffs": "744662e5b2c92171cf777d36a6b4e3c59d2a6d99ffe4914a41f6a7a2a24f779a"
+  }
+}

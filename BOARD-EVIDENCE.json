@@ -1,0 +1,48 @@
+{
+  "release": "X99-Firmware-Toolkit-UX-Gen2-v2.6",
+  "xd4": {
+    "physical_dump_sha256": "c8ef74eb1029319f789dd6150705a9c7b22774cb579618f5b90b569eb8b7dd85",
+    "stock_reference_sha256": "87a8d4d9d51f097006dcaf23b706d0f9cf859c3ea576f164ea6446fcdae526d7",
+    "oc_reference_sha256": "2c86003b84aee49b4463df45415bf1c7ae08ec650ec0a84d1c4fe3cc288a01e8",
+    "main_amitse_decompressed_size": 314294,
+    "main_amitse_decompressed_sha256": "613cecf5f6ca4ffb54426cb7623c4b2d68dd4607f4cecd56003f03f2c78959b8",
+    "intelsetup_payload_size": 6124,
+    "amitse_setup_layout": "classic-7c084",
+    "optimized_defaults_supported": true,
+    "unlocked_multiplier_profile_supported": true,
+    "oc_reference_exact_changes": {
+      "primary_intelsetup_relative_offsets": [
+        5075,
+        5076,
+        5117,
+        5677
+      ],
+      "nv_internal_decompressed_offsets": [
+        5647,
+        5648,
+        5689,
+        6249
+      ],
+      "amitse_decompressed_offsets": [
+        78780,
+        372908,
+        373208,
+        373209,
+        376684,
+        378601,
+        378674,
+        378675
+      ]
+    }
+  },
+  "xd4_compact": {
+    "source": "BIOS-Dump-20261006-014633x99xd4-novrm.ROM",
+    "source_sha256": "4d46ef414d60860946c62afd9d97258686f3744549e36b26df130651f80b49c8",
+    "amitse_setup_layout": "compact-7bffc",
+    "unlocked_multiplier_profile_supported": true,
+    "changed_decompressed_offsets": [
+      "0x5B150"
+    ],
+    "verification": "Python payload and LZMA round-trip; Windows helper not run"
+  }
+}

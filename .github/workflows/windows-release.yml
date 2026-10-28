@@ -1,0 +1,108 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the validated v0.86 GitHub release
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out exact source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Identify application version
+        id: version
+        run: |
+          $Text = Get-Content x99toolkit/__init__.py -Raw
+          if ($Text -notmatch '__version__\s*=\s*"([0-9.]+)"') { throw 'Application version missing.' }
+          "value=$($Matches[1])" >> $env:GITHUB_OUTPUT
+      - name: Verify source inventory
+        run: |
+          if (Test-Path -LiteralPath RESUME-PACKAGING.cmd) { throw 'Temporary recovery script must not be published.' }
+          foreach ($Line in Get-Content SHA256SUMS.txt) {
+            $Expected, $Name = $Line -split '  ', 2
+            if ((Get-FileHash -LiteralPath $Name -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Expected) {
+              throw "Source hash mismatch: $Name"
+            }
+          }
+      - name: Build and validate Windows executables
+        run: |
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File INSTALL-BUILD-PREREQUISITES.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Windows build or validation failed: $LASTEXITCODE" }
+      - name: Create checked source archive
+        run: |
+          & "$PWD/.build-venv/Scripts/python.exe" scripts/package_source.py
+          if ($LASTEXITCODE -ne 0) { throw 'Source packaging failed.' }
+      - name: Require the real medium/elevated regression
+        run: |
+          [xml]$Tests = Get-Content build/source-tests.xml -Raw
+          $BoundaryTest = @($Tests.testsuites.testsuite.testcase | Where-Object { $_.name -eq 'test_real_elevated_helper_preserves_medium_caller_reply_access' })
+          if ($BoundaryTest.Count -ne 1 -or $BoundaryTest[0].SelectNodes('skipped|failure|error').Count -ne 0) { throw 'Windows medium/elevated file exchange was not verified.' }
+      - name: Preserve build and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-validation-${{ steps.version.outputs.value }}
+          path: |
+            setup-build-SenorX99.log
+            build/source-tests.xml
+            build/verified-*.json
+            build/smoke-*.json
+            build/windows-runtime-tests.json
+            build/windows-runtime-test.log
+            build/logs-*/**
+            SenorX99-*-Windows-x64.zip*
+            SenorX99-*_source.zip*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish validated release
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          $Tag = "v$env:APP_VERSION"
+          $Archive = "SenorX99-$Tag-Windows-x64.zip"
+          $Guide = "RELEASE-NOTES-$Tag.md"
+          $Notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          if (-not (Test-Path -LiteralPath $Archive)) { throw 'Validated Windows ZIP is missing.' }
+          $Overall = Get-Content build/windows-runtime-tests.json -Raw | ConvertFrom-Json
+          if ($Overall.success -ne $true) { throw 'Packaged runtime tests did not pass.' }
+          [xml]$Tests = Get-Content build/source-tests.xml -Raw
+          $Suites = @($Tests.testsuites.testsuite)
+          $Total = 0; $Skipped = 0; $Failures = 0
+          foreach ($Suite in $Suites) {
+            $Total += [int]$Suite.tests; $Skipped += [int]$Suite.skipped
+            $Failures += [int]$Suite.failures + [int]$Suite.errors
+          }
+          if ($Failures -ne 0) { throw 'Source tests have failures.' }
+          $BoundaryTest = @($Suites.testcase | Where-Object { $_.name -eq 'test_real_elevated_helper_preserves_medium_caller_reply_access' })
+          if ($BoundaryTest.Count -ne 1 -or $BoundaryTest[0].SelectNodes('skipped|failure|error').Count -ne 0) { throw 'Windows medium/elevated file exchange was not verified.' }
+          $Body = Get-Content -LiteralPath $Guide -Raw
+          Set-Content -LiteralPath $Notes -Value $Body -Encoding utf8
+          # An existing published version is never silently replaced.
+          gh release view $Tag --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host "$Tag is already published; leaving it unchanged."; exit 0 }
+          gh release create $Tag $Archive "$Archive.sha256" "SenorX99-$Tag`_source.zip" "SenorX99-$Tag`_source.zip.sha256" --target $env:GITHUB_SHA --title "SenorX99 $Tag" --notes-file $Notes --latest
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed.' }

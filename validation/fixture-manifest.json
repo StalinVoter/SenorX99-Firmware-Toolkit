@@ -1,0 +1,20 @@
+{
+  "fixtures_used_for_gen2_v2_validation": [
+    {
+      "name": "BIOS-Dump-20260914-211935-X99XD4(2).ROM",
+      "sha256": "c8ef74eb1029319f789dd6150705a9c7b22774cb579618f5b90b569eb8b7dd85",
+      "role": "physical XD4 dump; optimized and OC feature-gate validation"
+    },
+    {
+      "name": "x99xd4-PANDL-stock.ROM",
+      "sha256": "87a8d4d9d51f097006dcaf23b706d0f9cf859c3ea576f164ea6446fcdae526d7",
+      "role": "controlled XD4 stock reference"
+    },
+    {
+      "name": "x99xd4-OC_SB2023-pp0.rom",
+      "sha256": "2c86003b84aee49b4463df45415bf1c7ae08ec650ec0a84d1c4fe3cc288a01e8",
+      "role": "controlled XD4 OC reference"
+    }
+  ],
+  "fixtures_bundled": false
+}

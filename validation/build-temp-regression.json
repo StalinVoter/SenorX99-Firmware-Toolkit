@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-28",
+  "user_windows_report_sha256": "00a9ecedb152a5055bc6bd9baaaf9621816fd110c563be9ef5dc35f18862b951",
+  "user_windows_results": {
+    "tests": 312,
+    "passed": 75,
+    "skipped": 34,
+    "setup_errors": 203,
+    "assertion_failures": 0
+  },
+  "cause": "Access denied to shared pytest temporary root during tmp_path fixture setup",
+  "fix": "Explicit absolute --basetemp under freshly recreated project build directory; fail fast with short traceback",
+  "regression": {
+    "test": "tests/test_build_temp.py",
+    "platform": "Linux",
+    "passed": 1,
+    "control": "Denied shared-directory scan reproduces setup error",
+    "corrected": "Production build command temporary-directory configuration passes"
+  },
+  "corrected_windows_build_executed": false
+}

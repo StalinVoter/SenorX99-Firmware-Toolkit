@@ -1,0 +1,2 @@
+# Preserve the exact source bytes covered by SHA256SUMS.txt on every platform.
+* -text

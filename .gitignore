@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.spec
+!SenorX99.spec
+.build-venv/
+SenorX99-*-Windows-x64.zip*
+setup-build-SenorX99.log
+*.report.txt
+*.report.json
+*.build.log
+# External binaries are user-supplied and deliberately not redistributed.
+tools/UEFIReplace.exe
+tools/fptw64.exe
+tools/pmxdll32e.DLL
+tools/idrvdll32e.DLL
+# Runtime copy generated from fpt_support/fparts.txt.
+tools/fparts.txt
+
+# Runtime logs when running from source.
+LOGS/
+tools/mmtool_a5.exe
+tools/ChangeLogo.exe
+*.ROM
+*.rom
+*.bin
+SenorX99-*_source.zip*

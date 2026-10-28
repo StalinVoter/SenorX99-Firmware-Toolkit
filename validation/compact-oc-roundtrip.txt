@@ -1,0 +1,136 @@
+Actual compact ROM: primary/NV no-op; one AMITSE byte; Python LZMA round-trip/reinspection/idempotence PASS (not a Windows UEFIReplace run)
+{
+  "source_sha256": "4d46ef414d60860946c62afd9d97258686f3744549e36b26df130651f80b49c8",
+  "changed_decompressed_offsets": [
+    "0x5B150"
+  ],
+  "new_inspection": {
+    "supported": true,
+    "matches": true,
+    "profile": "XD4 unlocked-multiplier OC compatibility",
+    "settings": [
+      {
+        "name": "Current Limitation",
+        "offset": "0x13D3",
+        "width": 2,
+        "stock": 1080,
+        "desired": 2048,
+        "stock_label": "1080 (135 A)",
+        "desired_label": "2048 (unlimited ICC on HEDT)",
+        "value": 2048,
+        "matches": true
+      },
+      {
+        "name": "Overclocking Lock",
+        "offset": "0x13FD",
+        "width": 1,
+        "stock": 0,
+        "desired": 1,
+        "stock_label": "Enable",
+        "desired_label": "Disable",
+        "value": 1,
+        "matches": true
+      },
+      {
+        "name": "Current Config",
+        "offset": "0x162D",
+        "width": 1,
+        "stock": 0,
+        "desired": 1,
+        "stock_label": "Disable",
+        "desired_label": "Enable",
+        "value": 1,
+        "matches": true
+      }
+    ],
+    "access": [
+      {
+        "name": "OverClocking Feature access",
+        "offset": 78716,
+        "stock": 1,
+        "desired": 5,
+        "value": 5,
+        "matches": true
+      },
+      {
+        "name": "XE Ratio Limit access",
+        "offset": 372772,
+        "stock": 1,
+        "desired": 5,
+        "value": 5,
+        "matches": true
+      },
+      {
+        "name": "Overclocking Lock failsafe",
+        "offset": 373072,
+        "stock": 0,
+        "desired": 1,
+        "value": 1,
+        "matches": true
+      },
+      {
+        "name": "Overclocking Lock optimal",
+        "offset": 373073,
+        "stock": 0,
+        "desired": 1,
+        "value": 1,
+        "matches": true
+      },
+      {
+        "name": "PP0 current-control access",
+        "offset": 376548,
+        "stock": 1,
+        "desired": 5,
+        "value": 5,
+        "matches": true
+      },
+      {
+        "name": "Current Config optimal",
+        "offset": 378465,
+        "stock": 0,
+        "desired": 1,
+        "value": 1,
+        "matches": true
+      },
+      {
+        "name": "Current Limitation optimal low",
+        "offset": 378538,
+        "stock": 56,
+        "desired": 0,
+        "value": 0,
+        "matches": true
+      },
+      {
+        "name": "Current Limitation optimal high",
+        "offset": 378539,
+        "stock": 4,
+        "desired": 8,
+        "value": 8,
+        "matches": true
+      }
+    ],
+    "family": "xd3-compact",
+    "layout": "compact-7bffc",
+    "primary": {
+      "matches": true,
+      "values": {
+        "Current Limitation": 2048,
+        "Overclocking Lock": 1,
+        "Current Config": 1
+      }
+    },
+    "nv_internal": {
+      "matches": true,
+      "values": {
+        "Current Limitation": 2048,
+        "Overclocking Lock": 1,
+        "Current Config": 1
+      },
+      "decompressed_sha256": "1ec16cf65f2313f909f08edc7a99541ecc37d66fbf51829e5c493ddf9cd14540"
+    },
+    "amitse": {
+      "matches": true,
+      "decompressed_sha256": "d27827e3821d38842f3696016a6c6666559c64d7ae6e16164ccbfee162362650"
+    }
+  }
+}

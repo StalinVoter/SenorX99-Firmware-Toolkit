@@ -1,0 +1,10 @@
+{
+  "release": "X99-Firmware-Toolkit-UX-Gen2-v2.6",
+  "base_source": "previous UX Gen2 source release",
+  "changes": [
+    "Added verified XD4 unlocked-multiplier compatibility profile",
+    "Enabled performance-oriented defaults for classic-7c084 XD3/XD4 firmware",
+    "Removed abandoned boot-logo handoff experiment",
+    "Simplified user-facing Secure Boot language"
+  ]
+}

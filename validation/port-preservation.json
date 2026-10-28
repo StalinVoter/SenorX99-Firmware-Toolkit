@@ -1,0 +1,44 @@
+{
+  "source_archive_sha256": "15adbfe1366bbd75e9679fa069d7a37835dc64511ad5975a0650f5734c91a8cf",
+  "standalone_reference_commit": "ccf52a2cbd9fe7ccad2dbdcb0ac79f3f4f2b31ad",
+  "byte_identical_firmware_modules": [
+    "overclock.py",
+    "firmware.py",
+    "replacer.py",
+    "microcode.py",
+    "ffsverify.py",
+    "diagnostics.py",
+    "optimized.py",
+    "ser8989.py",
+    "buildprogress.py",
+    "inspection.py",
+    "fit.py",
+    "cstates.py",
+    "families.py"
+  ],
+  "unchanged_protected_fpt_function_asts": {
+    "_write_flash_report_unchecked": true,
+    "_write_flash_report": true,
+    "create_verified_backup": true,
+    "_dump_once": true,
+    "_flash_result": true
+  },
+  "all_bundled_resources_match_baseline": true,
+  "resources": [
+    "BOARD-EVIDENCE.json",
+    "V9S-SUPPORT-MAPPING.txt",
+    "assets/SenorSpace-XD3-4bit.bmp",
+    "assets/SenorSpace.bmp",
+    "drivers/ser8989_S3TurboHack-40-20-20.ffs",
+    "drivers/ser8989_S3TurboHack-50-0-0.ffs",
+    "drivers/ser8989_S3TurboHack-50-40-10.ffs",
+    "drivers/ser8989_S3TurboHack-50-50-30.ffs",
+    "drivers/ser8989_S3TurboHack-60-50-50.ffs",
+    "drivers/ser8989_S3TurboHack-70-50-50.ffs",
+    "fpt_support/fparts.txt",
+    "secureboot_donors/KekVar.ffs",
+    "secureboot_donors/PkVar.ffs",
+    "secureboot_donors/dbVar.ffs"
+  ],
+  "v0.86_splash_change": "Accept an unchanged ROM only after all final logo images match and no replacement command was needed."
+}
