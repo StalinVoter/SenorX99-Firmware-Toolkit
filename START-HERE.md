@@ -1,6 +1,8 @@
-# SenorX99 v0.91
+# SenorX99 v0.93
 
 Extract the whole ZIP, then open **SenorX99.exe**. You do not need to install Python. Keep all extracted folders beside the executable.
+
+Click the Union Jack or Brazilian flag above any page heading to switch the whole interface immediately between English and Brazilian Portuguese. The app remembers your choice; the loaded ROM and selected modifications stay in place.
 
 Follow the numbered steps on the left:
 

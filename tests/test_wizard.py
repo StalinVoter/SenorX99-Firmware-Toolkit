@@ -60,7 +60,7 @@ def built(w,tmp_path):
 
 def test_six_clickable_tabs_and_sequential_action_gates(window):
  _,w,_=window
- assert w.windowTitle()=='SenorX99 v0.91' and w.stack.count()==6
+ assert w.windowTitle()=='SenorX99 v0.93' and w.stack.count()==6
  assert w.completed_steps()==[True,False,False,False,False,False]
  for index,b in enumerate(w.nav_buttons):
   assert b.isEnabled();b.click();assert w.stack.currentIndex()==index
@@ -187,6 +187,7 @@ def test_tool_group_atomic_downloads_and_failure_preserve_existing_files(window,
  class Response(io.BytesIO):
   def geturl(self):return 'https://example.invalid/source'
  monkeypatch.setattr(inventory,'urlopen',lambda *a,**kw:Response(payload))
+ monkeypatch.setattr(w,'_confirm_tool_download',lambda name:True)
  w._refresh_tools();w._download_tool('mmtool_a5.exe');spin(app,lambda:w.download_thread is None)
  assert (folder/'mmtool_a5.exe').read_bytes()==b'wrong'
  assert 'failed' in w.tool_download_status.text().lower()
@@ -198,3 +199,83 @@ def test_cli_still_requires_all_tools(window,monkeypatch,tmp_path,capsys):
  monkeypatch.setattr(cli,'inspect_rom',lambda *a:pytest.fail('CLI bypassed all-tools requirement'))
  with pytest.raises(SystemExit) as exc:cli.main()
  assert exc.value.code==2
+
+
+def test_flags_on_every_page_switch_all_pages_and_preserve_built_rom(window,tmp_path):
+ app,w,_=window
+ loaded(w,tmp_path);output=built(w,tmp_path)
+ plan=w._plan();done=w.completed_steps();rom=w.rom_path;digest=w._build_digest
+ try:
+  assert len(w.language_flag_buttons)==6
+  for page,buttons in enumerate(w.language_flag_buttons):
+   w._set_nav(page);app.processEvents()
+   assert w.pages[page][0].layout().itemAt(0).layout().indexOf(buttons['pt-BR'])>=0
+   for language in ('pt-BR','en'):
+    assert buttons[language].isEnabled() and buttons[language].isVisible()
+    assert not buttons[language].icon().isNull()
+    buttons[language].click();app.processEvents()
+    assert w.catalog.code==language and w.language_combo.currentData()==language
+    assert w.stack.currentIndex()==page
+    assert w.rom_path==rom and w.last_built_rom==output and w._build_digest==digest
+    assert w._plan()==plan and w.completed_steps()==done
+    for i,flags in enumerate(w.language_flag_buttons):
+     assert flags[language].isChecked() and not flags['en' if language=='pt-BR' else 'pt-BR'].isChecked()
+     assert w.nav_labels[i].text()==w.t(f'step.{i+1}.title')
+     assert w.continue_buttons[i].text()==w.t('common.finish' if i==5 else 'common.continue')
+  # Restarting also restores the saved preference.
+  w.language_flag_buttons[0]['pt-BR'].click()
+  other=gui.Window(runtime_check=True)
+  try:
+   assert other.catalog.code=='pt-BR'
+   assert all(flags['pt-BR'].isChecked() for flags in other.language_flag_buttons)
+  finally:other.close();other.deleteLater();app.processEvents()
+ finally:w._select_language('en')
+
+
+def test_language_flags_remain_available_on_locked_pages(window):
+ app,w,_=window
+ try:
+  w._set_nav(5);app.processEvents();assert not w.page_bodies[5].isEnabled()
+  w.language_flag_buttons[5]['pt-BR'].click()
+  assert w.catalog.code=='pt-BR' and not w.page_bodies[5].isEnabled()
+ finally:w._select_language('en')
+
+
+@pytest.mark.parametrize('name',[g.name for g in inventory.TOOL_GROUPS])
+@pytest.mark.parametrize('approve',[False,True])
+@pytest.mark.parametrize('language',['en','pt-BR'])
+def test_tool_download_dialog_requires_yes_before_starting(window,monkeypatch,name,approve,language):
+ from PySide6.QtCore import QTimer
+ from PySide6.QtWidgets import QDialogButtonBox
+ from x99toolkit.tool_confirmation import ToolDownloadConfirmation, NOTICES
+ app,w,folder=window;started=[];seen=[]
+ for member in inventory.GROUPS_BY_NAME[name].files:(folder/member).unlink()
+ w._refresh_tools();w._select_language(language)
+ monkeypatch.setattr(w,'_launch',lambda task,worker,callback:started.append((task,worker.name)))
+ def answer():
+  box=app.activeModalWidget()
+  if not isinstance(box,ToolDownloadConfirmation):
+   seen.append(False)
+   if box:box.reject()
+   return
+  details=box.details.toPlainText()
+  seen.append(all(inventory.TOOLS_BY_NAME[f].url in details and f in details for f in inventory.GROUPS_BY_NAME[name].files)
+              and str(folder) in details and NOTICES[name][0] in details
+              and box.buttons.button(QDialogButtonBox.No).isDefault())
+  box.buttons.button(QDialogButtonBox.Yes if approve else QDialogButtonBox.No).click()
+ try:
+  QTimer.singleShot(0,answer)
+  w.tool_rows[name][1].click()
+  assert seen==[True]
+  assert started==([('download',name)] if approve else [])
+  if not approve:assert w._download_name=='' and w._download_result is None
+ finally:w._select_language('en')
+
+
+def test_tool_download_window_close_cancels(window,monkeypatch):
+ from PySide6.QtCore import QTimer
+ app,w,_=window
+ monkeypatch.setattr(w,'_launch',lambda *args:pytest.fail('Closing confirmation started a download'))
+ QTimer.singleShot(0,lambda:app.activeModalWidget().close())
+ w._download_tool('fpt')
+ assert w._download_name=='' and w._download_result is None

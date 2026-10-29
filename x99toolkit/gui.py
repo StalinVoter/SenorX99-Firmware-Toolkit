@@ -9,9 +9,9 @@ import sys
 import tempfile
 import traceback
 
-from PySide6.QtCore import QObject, QSettings, QThread, Signal, Qt, QUrl, QTimer
+from PySide6.QtCore import QObject, QSettings, QThread, Signal, Qt, QUrl, QTimer, QSize
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QPixmap
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialogButtonBox,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
     QSplitter, QStackedWidget, QVBoxLayout, QWidget)
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 from . import __version__
 from .cpu import CpuDetection, detect_cpu
 from .localization import Catalog
+from .language_flags import language_flag
 from .recommendations import FEATURES, firmware_availability, recommended_modifications
 from .inspection import inspect_rom
 from .splash_preflight import inspect_splash_replacement
@@ -31,6 +32,7 @@ from . import tool_inventory as inventory
 from . import fpt_gui
 from .fpt import backup_directory
 from .tool_gui import ToolDownloadWorker
+from .tool_confirmation import ToolDownloadConfirmation
 from .buildprogress import BuildProgressTracker
 from .sessionlog import start_session_log, finish_session_log, install_exception_hook, log
 
@@ -46,6 +48,8 @@ QPushButton#primary {background:#096cc2;color:white;border-color:#096cc2;font-we
 QPushButton#primary:disabled {background:#cad5e0;border-color:#cad5e0;color:#738295;}
 QPushButton#nav {background:transparent;border:0;text-align:left;padding:0;}
 QPushButton#nav:checked {background:#d7e7f8;}
+QPushButton#languageFlag {padding:4px;}
+QPushButton#languageFlag:checked {background:#d7e7f8;border:2px solid #096cc2;}
 QPushButton#help {color:#0868b4;font-weight:700;border-radius:15px;padding:3px;}
 QFrame#card {background:white;border:1px solid #dce3eb;border-radius:10px;}
 QLabel {background:transparent;}
@@ -272,7 +276,7 @@ class Window(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
         outer.addWidget(self._make_sidebar())
         self.stack = QStackedWidget(); outer.addWidget(self.stack, 1)
-        self.pages = []; self.page_bodies = []; self.continue_buttons = []; self.gate_labels = []
+        self.language_flag_buttons = []; self.pages = []; self.page_bodies = []; self.continue_buttons = []; self.gate_labels = []
         for i in range(6): self._make_page(i)
         self._make_tools_page(); self._make_rom_page(); self._make_analysis_page()
         self._make_config_page(); self._make_build_page(); self._make_finish_page()
@@ -327,6 +331,17 @@ class Window(QMainWindow):
 
     def _make_page(self, index):
         page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(28, 25, 28, 24); layout.setSpacing(14)
+        languages = QHBoxLayout(); languages.setSpacing(8)
+        group = QButtonGroup(page); group.setExclusive(True)
+        buttons = {}
+        for code, name in (('en', 'English'), ('pt-BR', 'Português (Brasil)')):
+            flag = QPushButton(); flag.setObjectName('languageFlag'); flag.setCheckable(True)
+            flag.setIcon(language_flag(code)); flag.setIconSize(QSize(48, 32)); flag.setFixedSize(68, 46)
+            flag.setToolTip(name); flag.setAccessibleName(name)
+            flag.setChecked(self.catalog.code == code)
+            flag.clicked.connect(lambda _checked=False, language=code: self._select_language(language))
+            group.addButton(flag); languages.addWidget(flag); buttons[code] = flag
+        languages.addStretch(); layout.addLayout(languages); self.language_flag_buttons.append(buttons)
         title = self.label(f'step.{index+1}.title', name='title'); layout.addWidget(title)
         row = QHBoxLayout(); row.setSpacing(20)
         row.addWidget(self.label(f'step.{index+1}.description', name='muted'), 1)
@@ -510,12 +525,20 @@ class Window(QMainWindow):
 
     def _language_changed(self):
         if self._initializing: return
-        code = self.language_combo.currentData()
+        self._select_language(self.language_combo.currentData())
+
+    def _select_language(self, code):
+        if self._initializing: return
         try:
             self.catalog.select(code)
         except (OSError, ValueError):
             self._message('error.language'); self.language_combo.blockSignals(True)
-            self.language_combo.setCurrentIndex(self.language_combo.findData(self.catalog.code)); self.language_combo.blockSignals(False); return
+            self.language_combo.setCurrentIndex(self.language_combo.findData(self.catalog.code)); self.language_combo.blockSignals(False)
+            self._sync_language_flags(); return
+        self.language_combo.blockSignals(True)
+        self.language_combo.setCurrentIndex(self.language_combo.findData(code))
+        self.language_combo.blockSignals(False)
+        self._sync_language_flags()
         self.settings.setValue('language', code)
         for widget, key in self._bindings: widget.setText(self.t(key))
         self.setWindowTitle(self.t('app.title', version=__version__))
@@ -523,6 +546,11 @@ class Window(QMainWindow):
         self.dump_view.retranslate(); self.flash_view.retranslate()
         if self._help_key: self._show_help(self._help_key)
         self._refresh_state()
+
+    def _sync_language_flags(self):
+        for buttons in self.language_flag_buttons:
+            for code, button in buttons.items():
+                button.setChecked(code == self.catalog.code)
 
     # ---- state, gates and navigation ----
     def completed_steps(self):
@@ -637,8 +665,13 @@ class Window(QMainWindow):
         self._refresh_tools(); self.refresh_drivers()
         if self._all_tools_ready: self._start_fpt_probe()
 
+    def _confirm_tool_download(self, name):
+        dialog = ToolDownloadConfirmation(self, name)
+        return dialog.exec() == QDialog.DialogCode.Accepted
+
     def _download_tool(self, name):
         if self._operation_busy(): return
+        if not self._confirm_tool_download(name): return
         self._download_name = name; self._download_result = None
         self.tool_download_status.setText(self.t('tools.downloading', tool=inventory.GROUPS_BY_NAME[name].label))
         worker = ToolDownloadWorker(name)

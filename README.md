@@ -1,6 +1,6 @@
 Thank you to [MiyConst](https://www.youtube.com/c/Miyconst) for his tireless work promoting the X99 platform and helping the community get more from these motherboards. None of this would have been possible without him.
 
-# SenorX99 v0.91
+# SenorX99 v0.93
 
 **Firmware Toolkit for Chinesium 2011-3 Xeon Boards**
 
@@ -16,7 +16,7 @@ SenorX99 helps you back up and modify the BIOS on supported Chinesium X99 mother
 - **Performance-oriented BIOS defaults.** Includes question-mark help listing the exact settings and reasons for changing them.
 - **Boot-logo replacement.** Uses the included image or a custom BMP. A custom image must pass a replacement and verification trial before it becomes selectable.
 - **Inline dump/flash progress.** Progress bars and FPT console output appear inside the relevant page. Flashing retains the existing two-backup comparison, verification and automatic recovery workflow.
-- **External language files.** All main-interface text comes from `languages/en.json`. Only English is included. A later translation can supply another UTF-8 JSON file using the same identifiers and placeholders.
+- **External language files.** All main-interface text comes from `languages/en.json`. English and Brazilian Portuguese are included. Click the Union Jack or Brazilian flag above any page heading to switch the entire interface immediately; your ROM and selections stay in place. Other translations can use the same identifiers and placeholders.
 
 Each modification still requires the corresponding supported ROM structures. CPU detection guides recommendations and does not block manual choices for a different target CPU.
 

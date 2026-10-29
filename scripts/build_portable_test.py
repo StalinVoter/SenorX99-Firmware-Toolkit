@@ -96,7 +96,7 @@ def build(embed, wheels, gcc, windres):
     shutil.copy2(ROOT/'resource-manifest.json',destination/'resource-manifest.json')
     shutil.copy2(ROOT/'languages/README.md',destination/'languages/README.md')
     shutil.copy2(ROOT/'README.md',destination/'README.txt')
-    for name in ('START-HERE.md','RELEASE-NOTES-v0.91.md','BUILD-VALIDATION.md','TEST-ELEVATED-HELPER.cmd'):
+    for name in ('START-HERE.md','RELEASE-NOTES-v0.93.md','BUILD-VALIDATION.md','TEST-ELEVATED-HELPER.cmd'):
         shutil.copy2(ROOT/name,destination/name)
     (destination/'tools').mkdir();shutil.copy2(ROOT/'tools/README.txt',destination/'tools/README.txt')
     # Validate all Windows private import/export relationships before packaging.

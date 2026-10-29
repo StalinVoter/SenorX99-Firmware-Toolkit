@@ -195,6 +195,19 @@
     "error.profile": "Choose a validated undervolt profile before continuing.",
     "error.resources": "The bundled Secure Boot files are missing or damaged. Extract the complete release again.",
     "status.no_file": "No BIOS has been loaded yet.",
-    "status.not_built": "Build a verified BIOS in step 5 before saving or flashing it."
+    "status.not_built": "Build a verified BIOS in step 5 before saving or flashing it.",
+    "download.title": "Download and install tool",
+    "download.question": "Download and install {tool}?",
+    "download.files": "Files:",
+    "download.sources": "Download sources:",
+    "download.archive": "The ZIP download will be unpacked to install {file}.",
+    "download.official": "Source: the tool developer’s GitHub release.",
+    "download.mirror": "Source: a third-party GitHub mirror, not the publisher’s own download server.",
+    "download.rights": "Copyright and licence information:",
+    "download.license_bsd": "BSD 2-Clause licence. Licence text and conditions:",
+    "download.license_publisher": "The publisher’s licence terms apply. The copyright notice above comes from the tool’s file metadata.",
+    "download.destination": "SenorX99 will place the tool files in the TOOLS folder:\n{folder}",
+    "download.existing": "Files already installed and verified will be reused. Click Yes to proceed or No to cancel.",
+    "download.details": "Tool download details"
   }
 }

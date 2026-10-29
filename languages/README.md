@@ -1,6 +1,6 @@
 # Translating SenorX99
 
-Only English is supplied with v0.91. The app does not translate text automatically or contact a translation service.
+English and Brazilian Portuguese are supplied with v0.93. Click either flag at the top of any page to switch immediately. The app does not translate text automatically or contact a translation service.
 
 To add a language later:
 
@@ -14,4 +14,4 @@ Missing entries fall back to English. A catalog with mismatched placeholders is 
 
 The selected language is remembered. Switching language updates the interface without resetting the firmware workflow. Test longer translations for wrapping and clipping in the sidebar, buttons, help panel and progress summaries.
 
-The bundled English file is checked as part of the app's required resources. Additional language files can be added without changing that resource inventory. Editing the English source catalog for a new build requires updating its resource hash as part of packaging.
+Both bundled language files are checked as part of the app's required resources. Additional language files can be added without changing that resource inventory. Editing the English source catalog for a new build requires updating its resource hash as part of packaging.

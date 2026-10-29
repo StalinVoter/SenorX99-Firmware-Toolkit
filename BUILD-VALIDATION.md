@@ -1,4 +1,4 @@
-# SenorX99 v0.91 build validation
+# SenorX99 v0.93 build validation
 
 The public Windows package is built from the release commit by the repository’s Windows release workflow. Source tests and finished-executable checks must pass before publication.
 

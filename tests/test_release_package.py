@@ -28,19 +28,19 @@ def fixture_release(root: Path):
         target = dist / relative; target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(actual / relative, target)
     shutil.copy2(actual / 'resource-manifest.json', dist / 'resource-manifest.json')
-    for name in ('START-HERE.md', 'RELEASE-NOTES-v0.91.md'):
+    for name in ('START-HERE.md', 'RELEASE-NOTES-v0.93.md'):
         (dist / name).write_text('documentation fixture')
     cases = []
     for kind in ('gui', 'cli', 'conflicting-dlls'):
         name = 'SenorX99' + ('-CLI' if kind == 'cli' else '') + '.exe'
         (dist / name).write_bytes(name.encode())
-        report = {'success': True, 'version': '0.91', 'platform': 'windows', 'drag_drop_verified': True,
+        report = {'success': True, 'version': '0.93', 'platform': 'windows', 'drag_drop_verified': True,
                   'exe_sha256': sha256((dist / name).read_bytes()).hexdigest()}
         (root / 'build' / f'smoke-{kind}.json').write_text(json.dumps(report))
         cases.append({'case': kind, 'success': True})
     cases.append({'case': 'helper-transport', 'success': True})
     (root / 'build' / 'smoke-helper-transport.json').write_text(json.dumps({
-        'version': '0.91', 'success': True, 'hardware_access': False, 'result': {'transport_verified': True,
+        'version': '0.93', 'success': True, 'hardware_access': False, 'result': {'transport_verified': True,
             'helper_exe_sha256': sha256((dist / 'SenorX99-CLI.exe').read_bytes()).hexdigest()},
         'exe_sha256': sha256((dist / 'SenorX99.exe').read_bytes()).hexdigest()}))
     # PowerShell 5.1 reports have a UTF-8 BOM.
