@@ -8,17 +8,15 @@ SenorX99 helps you back up and modify the BIOS on supported Chinesium X99 mother
 
 ## Features
 
-- **A guided, six-step interface.** Check files, load or dump a BIOS, review its analysis, choose changes, build a new ROM, then save or flash it. Completed steps receive a green checkmark.
+- **A guided, six-step interface.** Check files, load or dump a BIOS, review its analysis, choose changes, build a new ROM, then save or flash it. Available in English and Brazilian Portuguese.
 - **CPU detection and recommendations.** Recognises the installed CPU model and suggests appropriate modifications. Custom settings remain available when preparing a BIOS for another computer.
-- **Turbo Boost Unlock.** Prepares supported E5-26xx v3 BIOS images for sustained all-core turbo under load, using the selected ser8989 undervolt profile. The recommended profile is −60/−50/−50 mV for Core / Cache / System Agent.
-- **Overclocking unlock.** Exposes supported BIOS overclocking controls. Recommendations cover E5-1650 v3, 1660 v3, 1680 v3 and i7-5820K, 5930K, 5960X, 6800K, 6850K, 6900K and 6950X.
+- **Turbo Boost Unlock.** Prepares supported E5-26xx v3 BIOS images for sustained all-core turbo under load, using the selected ser8989 undervolt profile. The −60/−50/−50 mV scheme for Core / Cache / System Agent is a good default starting point, as it works on the vast majority of compatible CPUs.
+- **Overclocking unlock.** Exposes supported BIOS overclocking controls. Only relevant for the following ten CPUs: E5-1650 v3, E5-1660 v3, E5-1680 v3, i7-5820K, i7-5930K, i7-5960X, i7-6800K, i7-6850K, i7-6900K and i7-6950X.
 - **Secure Boot certificates.** Inspects the ROM's factory certificate defaults and updates outdated defaults to the bundled validated 2023-capable set. Preserves dbx and recognises already-current defaults.
-- **Performance-oriented BIOS defaults.** Includes question-mark help listing the exact settings and reasons for changing them.
-- **Boot-logo replacement.** Uses the included image or a custom BMP. A custom image must pass a replacement and verification trial before it becomes selectable.
-- **Inline dump/flash progress.** Progress bars and FPT console output appear inside the relevant page. Flashing retains the existing two-backup comparison, verification and automatic recovery workflow.
-- **External language files.** All main-interface text comes from `languages/en.json`. English and Brazilian Portuguese are included. Click the Union Jack or Brazilian flag above any page heading to switch the entire interface immediately; your ROM and selections stay in place. Other translations can use the same identifiers and placeholders.
+- **Optimized BIOS defaults.** Adjusts CPU, memory and SATA settings to prioritise performance, disabling selected power-saving features and memory scrubbing to reduce latency and background overhead.
+- **Boot-logo replacement.** Replace the motherboard’s startup logo with the included image or your own compatible BMP.
 
-Each modification still requires the corresponding supported ROM structures. CPU detection guides recommendations and does not block manual choices for a different target CPU.
+Each modification still requires the corresponding supported ROM structures.
 
 ## How to use the app
 
