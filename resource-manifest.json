@@ -15,7 +15,7 @@
     "secureboot_donors/KekVar.ffs": "6b8bcfd771d6efcba8459d62d2a8687a252671d66ea0f22ee6aa2140ac8e802a",
     "secureboot_donors/PkVar.ffs": "6ad2c119c70b4325ad29138c65d0ddafd09cdba299d34fdcb4e3f2aa01b1e7dd",
     "secureboot_donors/dbVar.ffs": "744662e5b2c92171cf777d36a6b4e3c59d2a6d99ffe4914a41f6a7a2a24f779a",
-    "languages/en.json": "1f7c53bec9c0f55bc746cf2c0e2cb1ce48e90cdf695718e4bdbfbcb7a5d46a0b",
-    "languages/pt-BR.json": "2e8779d0dfb0d5428ddd34b2b4585e8903a74f0bd2ef16554d8b0872b3fa5cce"
+    "languages/en.json": "54cdf97a676cb8db0ae3b5e4ac7de6ac1c353e800d61958508c591d231734c20",
+    "languages/pt-BR.json": "751e811fb4c5cfc3d329a19254443ccede9ab3fa32bab8fa0226c212ee022af3"
   }
 }

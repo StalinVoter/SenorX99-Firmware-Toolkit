@@ -15,7 +15,7 @@ import sys
 def main() -> int:
     start_session_log(__version__, "SenorX99")
     install_exception_hook()
-    parser = argparse.ArgumentParser(description="SenorX99 v0.93: inspect and create validated X99 firmware")
+    parser = argparse.ArgumentParser(description="SenorX99 v0.931: inspect and create validated X99 firmware")
     parser.add_argument('--version', action='version', version=f'SenorX99 v{__version__}')
     sub = parser.add_subparsers(dest="cmd", required=True)
     inspect_parser = sub.add_parser("inspect")

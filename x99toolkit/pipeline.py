@@ -88,7 +88,7 @@ def build_rom(source: Path, output: Path, tools: ToolPaths, apply_tbu: bool = Fa
         log_path = report_paths(output)[0]
         report.build_log_path = str(log_path)
         log = log_path.open("w", encoding="utf-8", buffering=1)
-        log.write(f"SenorX99 v0.93 live log\nStarted: {datetime.now().isoformat()}\nInput: {source}\nOutput: {output}\nPlatform: {platform.platform()}\nPython: {sys.version}\nMMTool: {tools.mmtool}\nUEFIReplace: {tools.uefireplace}\nChangeLogo: {tools.changelogo}\n")
+        log.write(f"SenorX99 v0.931 live log\nStarted: {datetime.now().isoformat()}\nInput: {source}\nOutput: {output}\nPlatform: {platform.platform()}\nPython: {sys.version}\nMMTool: {tools.mmtool}\nUEFIReplace: {tools.uefireplace}\nChangeLogo: {tools.changelogo}\n")
         if not source.is_file() or source.suffix.lower() not in (".rom", ".bin"):
             raise ValueError("input must be an existing .ROM or .BIN")
         if source == output or (output.exists() and source.samefile(output)):

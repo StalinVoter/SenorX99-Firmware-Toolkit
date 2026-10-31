@@ -60,7 +60,7 @@ def built(w,tmp_path):
 
 def test_six_clickable_tabs_and_sequential_action_gates(window):
  _,w,_=window
- assert w.windowTitle()=='SenorX99 v0.93' and w.stack.count()==6
+ assert w.windowTitle()=='SenorX99 v0.931' and w.stack.count()==6
  assert w.completed_steps()==[True,False,False,False,False,False]
  for index,b in enumerate(w.nav_buttons):
   assert b.isEnabled();b.click();assert w.stack.currentIndex()==index

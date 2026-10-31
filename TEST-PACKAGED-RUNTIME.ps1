@@ -126,7 +126,7 @@ try {
         }
         if (-not (Test-Path -LiteralPath $Output)) { throw "$CaseName produced no JSON result." }
         $Result = Get-Content -LiteralPath $Output -Raw | ConvertFrom-Json
-        if ($Result.success -ne $true -or $Result.version -ne '0.93') {
+        if ($Result.success -ne $true -or $Result.version -ne '0.931') {
             Write-RuntimeTestDiagnostics -CaseDir $CaseDir -Reports $Reports -CaseName $CaseName -Output $Output
             throw "$CaseName reported failure."
         }

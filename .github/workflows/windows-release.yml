@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish the validated v0.93 GitHub release
+        description: Publish the validated v0.931 GitHub release
         type: boolean
         default: false
 

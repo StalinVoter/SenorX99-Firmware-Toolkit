@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
 from . import __version__
 from .cpu import CpuDetection, detect_cpu
 from .localization import Catalog
+from .flash_warning import confirmation_key
 from .language_flags import language_flag
 from .recommendations import FEATURES, firmware_availability, recommended_modifications
 from .inspection import inspect_rom
@@ -1085,7 +1086,9 @@ class Window(QMainWindow):
     def start_flash(self):
         if not self.completed_steps()[4] or not self._ensure_fpt_ready(): return
         if not self._verified_build(): self._message('error.changed'); self._invalidate_build(); self._refresh_state(); return
-        if not self._message('fpt.confirm', title='fpt.confirm_title', confirm=True, path=self.last_built_rom): return
+        key = confirmation_key(self._build_plan, self.report.rom_sha256, self.own_dump_hashes)
+        values = {} if key == 'fpt.confirm_secureboot' else dict(path=self.last_built_rom)
+        if not self._message(key, title='fpt.confirm_title', confirm=True, **values): return
         # Check again after a potentially long confirmation dialog.
         if not self._verified_build() or not self._require_all_tools(): self._message('error.changed'); return
         self._bios_mode = 'flash'; self._fpt_result = None; self._bios_running = True; self.flash_view.reset('flash')

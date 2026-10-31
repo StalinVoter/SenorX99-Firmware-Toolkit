@@ -55,7 +55,7 @@ def package(root: Path = ROOT) -> Path:
         target = stage / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / 'dist' / relative, target)
-    for name in ('resource-manifest.json', 'START-HERE.md', 'RELEASE-NOTES-v0.93.md'):
+    for name in ('resource-manifest.json', 'START-HERE.md', 'RELEASE-NOTES-v0.931.md'):
         shutil.copy2(root / 'dist' / name, stage / name)
     (stage / 'tools').mkdir()
     shutil.copy2(root / 'tools' / 'README.txt', stage / 'tools' / 'README.txt')

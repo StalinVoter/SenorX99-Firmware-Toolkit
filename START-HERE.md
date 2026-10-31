@@ -1,4 +1,4 @@
-# SenorX99 v0.93
+# SenorX99 v0.931
 
 Extract the whole ZIP, then open **SenorX99.exe**. You do not need to install Python. Keep all extracted folders beside the executable.
 

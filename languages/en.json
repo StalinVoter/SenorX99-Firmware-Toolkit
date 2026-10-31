@@ -93,7 +93,7 @@
     "fpt.flash_failed": "The BIOS was not successfully flashed. See the FPT output for the exact result. Backup: {path}",
     "fpt.flash_complete": "The BIOS was flashed and verified successfully. Backup: {path}",
     "fpt.confirm_title": "Confirm BIOS flash",
-    "fpt.confirm": "Flash this verified BIOS to the computer running SenorX99?\n\n{path}\n\nMake sure this BIOS is intended for this motherboard and the CPU that will be used with it. The app creates two independent backups and requires them to match before writing. If writing fails after erasing or programming begins, it attempts to restore the verified backup.\n\nDo not restart, remove power or close the app during flashing or recovery. An interrupted write can leave the motherboard unable to start and require an external programmer.\n\nProceed with flashing?",
+    "fpt.confirm": "You are about to flash:\n\n{path}\n\nBefore any erase/programming begins, the app will create TWO independent dumps of the currently installed BIOS and require them to be byte-identical. The verified backup is kept permanently.\n\nIf the requested flash fails after erase/programming has begun, the app will automatically attempt to restore that verified backup.\n\nHowever, interrupting BIOS erasing or programming WILL . BRICK . YOUR . MOTHERBOARD.\nDo NOT power off, restart, disconnect power or force-close the flashing process until the operation has finished, including any automatic recovery. An incomplete write can leave the motherboard unable to boot and may require an external programmer to recover.\n\nIf you are sure that you understand this, click \"Yes\" to proceed",
     "analysis.start": "Analysing the BIOS and testing logo replacement on a temporary copy…",
     "analysis.finished": "Analysis complete. No action is needed on this page; continue to choose your modifications.",
     "analysis.failed": "This BIOS could not be analysed. Return to step 2 and choose a valid ROM. Diagnostic output shows the reason.",
@@ -208,6 +208,7 @@
     "download.license_publisher": "The publisher’s licence terms apply. The copyright notice above comes from the tool’s file metadata.",
     "download.destination": "SenorX99 will place the tool files in the TOOLS folder:\n{folder}",
     "download.existing": "Files already installed and verified will be reused. Click Yes to proceed or No to cancel.",
-    "download.details": "Tool download details"
+    "download.details": "Tool download details",
+    "fpt.confirm_secureboot": "Please note: Flashing a Secure Boot-patched ROM dumped from this motherboard's own working BIOS is generally very low-risk. That being said, no BIOS flash is risk-free.\n\nHowever, interrupting BIOS erasing or programming WILL . BRICK . YOUR . MOTHERBOARD.\nDo NOT power off, restart, disconnect power or force-close the flashing process until the operation has finished, including any automatic recovery. An incomplete write can leave the motherboard unable to boot and may require an external programmer to recover.\n\nIf you are sure that you understand this, click \"Yes\" to proceed"
   }
 }

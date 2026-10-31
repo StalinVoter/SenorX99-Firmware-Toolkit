@@ -1,6 +1,6 @@
 Thank you to [MiyConst](https://www.youtube.com/c/Miyconst) for his tireless work promoting the X99 platform and helping the community get more from these motherboards. None of this would have been possible without him.
 
-# SenorX99 v0.93
+# SenorX99 v0.931
 
 **Firmware Toolkit for Chinesium 2011-3 Xeon Boards**
 

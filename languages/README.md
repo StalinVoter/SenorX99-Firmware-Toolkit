@@ -1,6 +1,6 @@
 # Translating SenorX99
 
-English and Brazilian Portuguese are supplied with v0.93. Click either flag at the top of any page to switch immediately. The app does not translate text automatically or contact a translation service.
+English and Brazilian Portuguese are supplied with v0.931. Click either flag at the top of any page to switch immediately. The app does not translate text automatically or contact a translation service.
 
 To add a language later:
 
